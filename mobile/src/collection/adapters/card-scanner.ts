@@ -4,6 +4,7 @@ import type { CardImage, OcrAdapter } from "../ports";
 /** On-device OCR through the card scanner module: Apple Vision on iOS, ML Kit on Android. */
 export const cardScannerOcr: OcrAdapter = {
   async recognise(image) {
+    if (!CardScanner) throw new ScannerUnavailable();
     return { lines: await CardScanner.recogniseTextAsync(image.uri) };
   },
 };
@@ -33,6 +34,7 @@ export class ScannerNotReady extends Error {
  * cancelled.
  */
 export async function captureCardFront(): Promise<CardImage | null> {
+  if (!CardScanner) throw new ScannerUnavailable();
   try {
     const uri = await CardScanner.scanCardAsync();
     return uri ? { uri } : null;
