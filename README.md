@@ -69,7 +69,7 @@ Better Auth's tables are renamed to match the glossary: `account` is our Account
 
 ## Running the app
 
-The app is meant to run as a **development build**. Expo Go works for now, because everything the app uses so far ships inside Expo Go, but it will stop working once on-device OCR lands.
+The app runs as a **development build**, not in Expo Go: card scanning uses the app's own native module, `mobile/modules/card-scanner`, which Expo Go doesn't include.
 
 The API only accepts sign-in requests from origins it trusts. The app's own `card://` scheme is always trusted. Expo Go sends `exp://…` instead, which is trusted unless `NODE_ENV=production`. If sign-in fails with "Invalid origin", the API console logs the origin it rejected.
 
@@ -87,7 +87,13 @@ After the first native build, `npm start -w mobile` starts Metro for JavaScript-
 - Android emulator: `http://10.0.2.2:3000`
 - Physical device: your computer's LAN address, e.g. `http://192.168.1.20:3000`, and set `BETTER_AUTH_URL` in `api/.env` to the same address
 
-The app opens on the Collection, which works signed out and offline: cards can be added by hand, opened, edited and deleted with no Account. Each Account's Collection lives in its own local database, `collection-<accountId>.db`, and a signed-out Holder uses `collection-anonymous.db` (ADR 0007). Cards added while signed out aren't moved into an Account yet when you sign in.
+The app opens on the Collection, which works signed out and offline: cards can be scanned or added by hand, opened, edited and deleted with no Account. Each Account's Collection lives in its own local database, `collection-<accountId>.db`, and a signed-out Holder uses `collection-anonymous.db` (ADR 0007). Cards added while signed out aren't moved into an Account yet when you sign in.
+
+### Scanning cards
+
+Tap **Scan** to open the system document camera, which finds the card's edges and captures it on its own: VisionKit on iOS, ML Kit's document scanner on Android. The card's text is recognised on the phone (Apple Vision / ML Kit Text Recognition) and parsed by on-device heuristics (`mobile/src/collection/adapters/heuristic-parser.ts`), then shown for review with doubtful fields marked "Check this". The photo is copied into the app's documents folder, under `card-images/<collection>/`, when the card is saved.
+
+Scanning needs a real camera: the iOS simulator says scanning isn't available and offers to add the card by hand. On Android the scanner runs inside Google Play services, so the device needs them. Native code for the scanner lives in `mobile/modules/card-scanner` (`ios/` and `android/`); rebuild with `ios`/`android` after changing it.
 
 To sign in, tap **Sign in**, enter any email address and copy the code from the API console.
 
@@ -103,6 +109,6 @@ npm run typecheck    # both workspaces
 
 **API (`api/test/`)**: each test calls `startTestApi()`, which creates a fresh Postgres schema in `card_test`, runs migrations into it, and starts the API on a random port with in-process fakes for email, the LLM provider, object storage and Google/Apple (`api.identity` issues the ID tokens native sign-in would get, and for the browser sign-in plays the person approving at the provider and the provider's token endpoint; only signatures and the network are faked, so Better Auth's own provider code runs). Tests talk to it with `TestClient` (keeps cookies like a phone would) and read emailed codes from `api.email`. The schema is dropped in `close()`. Point at another database with `TEST_DATABASE_URL`.
 
-**Collection (`mobile/test/`)**: `createTestCollection()` opens the Collection against an in-memory SQLite database with fake OCR, a fake on-device parser and a fake API client. Tests only use the `Collection` interface, never the database directly. This suite doesn't load React Native, so it runs in plain Node.
+**Collection (`mobile/test/`)**: `createTestCollection()` opens the Collection against an in-memory SQLite database with fake OCR, a fake on-device parser, a fake image store and a fake API client. Tests only use the `Collection` interface, never the database directly. The heuristic parser has its own tests (`heuristic-parser.test.ts`) through its `parse()` interface, fed OCR lines shaped like real cards. This suite doesn't load React Native, so it runs in plain Node.
 
-UI screens, the real camera and on-device models aren't covered by automated tests; they're tested by hand on devices.
+UI screens, the real camera, OCR and on-device models aren't covered by automated tests; they're tested by hand on devices with a fixed set of sample card photos.

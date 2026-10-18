@@ -14,6 +14,8 @@ const MIGRATIONS: string[] = [
     deleted_at TEXT,
     synced_at TEXT
   )`,
+  // The photo of a scanned card's front, as a file address on this device.
+  `ALTER TABLE card_copy ADD COLUMN front_image TEXT`,
 ];
 
 export async function migrateLocalDatabase(db: LocalDatabase): Promise<void> {

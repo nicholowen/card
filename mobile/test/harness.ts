@@ -2,7 +2,17 @@
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { openCollection, type CollectionDependencies } from "../src/collection";
-import type { ApiClient, LocalDatabase, OcrAdapter, OnDeviceParser, ParsedFields, SqlValue } from "../src/collection/ports";
+import type {
+  ApiClient,
+  CardImage,
+  CardImageStore,
+  LocalDatabase,
+  OcrAdapter,
+  OnDeviceParser,
+  ParsedFields,
+  RecognisedText,
+  SqlValue,
+} from "../src/collection/ports";
 
 /** An in-memory SQLite database standing in for expo-sqlite. */
 export class InMemoryDatabase implements LocalDatabase {
@@ -18,21 +28,35 @@ export class InMemoryDatabase implements LocalDatabase {
   }
 }
 
-/** Returns whatever text the test says the camera saw. */
+/** Returns whatever lines of text the test says the camera saw, one above the other. */
 export class FakeOcr implements OcrAdapter {
-  text = "";
-  async recognise() {
-    return { text: this.text };
+  lines: string[] = [];
+  readonly recognised: string[] = [];
+  async recognise(image: CardImage): Promise<RecognisedText> {
+    this.recognised.push(image.uri);
+    return {
+      lines: this.lines.map((text, i) => ({ text, box: { x: 0.1, y: 0.1 + i * 0.1, width: 0.5, height: 0.05 } })),
+    };
   }
 }
 
-/** Returns the fields the test configures, and records what it was asked to parse. */
+/** Returns the fields the test configures, and records the text it was asked to parse. */
 export class FakeOnDeviceParser implements OnDeviceParser {
   fields: ParsedFields = {};
-  readonly calls: string[] = [];
-  async parse(text: string) {
-    this.calls.push(text);
+  readonly calls: string[][] = [];
+  async parse(recognised: RecognisedText) {
+    this.calls.push(recognised.lines.map((line) => line.text));
     return this.fields;
+  }
+}
+
+/** Keeps photos in memory, at a durable address that says which card they belong to. */
+export class FakeImageStore implements CardImageStore {
+  readonly kept = new Map<string, string>();
+  async keep(image: CardImage, name: string): Promise<CardImage> {
+    const uri = `file:///documents/card-images/${name}.jpg`;
+    this.kept.set(uri, image.uri);
+    return { uri };
   }
 }
 
@@ -65,6 +89,7 @@ export async function createTestCollection() {
     ocr: new FakeOcr(),
     parser: new FakeOnDeviceParser(),
     api: new FakeApiClient(),
+    images: new FakeImageStore(),
     newId: () => randomUUID(),
     now: clock.now,
   } satisfies CollectionDependencies;

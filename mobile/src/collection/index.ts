@@ -1,4 +1,12 @@
-import type { ApiClient, LocalDatabase, OcrAdapter, OnDeviceParser } from "./ports";
+import type {
+  ApiClient,
+  CardImage,
+  CardImageStore,
+  LocalDatabase,
+  OcrAdapter,
+  OnDeviceParser,
+  ParsedFields,
+} from "./ports";
 import { migrateLocalDatabase } from "./schema";
 
 export type * from "./ports";
@@ -8,6 +16,7 @@ export interface CollectionDependencies {
   ocr: OcrAdapter;
   parser: OnDeviceParser;
   api: ApiClient;
+  images: CardImageStore;
   /** A new random id for a Card Copy (a UUID). */
   newId: () => string;
   /** The current time. */
@@ -46,11 +55,33 @@ export interface CardCopySummary extends Pick<CardFields, "name" | "jobTitle" | 
 export interface CardCopy {
   id: string;
   source: "scan" | "snapshot" | "manual";
+  /** Where a scanned card was parsed. Unset for cards that weren't parsed, such as ones typed in by hand. */
+  parsedBy?: ParsedBy;
   /** My Version: the Holder's own fields for this card. */
   fields: CardFields;
+  /** The photo of a scanned card's front, kept on this device. */
+  frontImage?: CardImage;
   createdAt: string;
   updatedAt: string;
 }
+
+/** Where a card was parsed: on the device, or in the cloud from its text or its image (ADR 0004). */
+export type ParsedBy = "device" | "cloud-text" | "cloud-vision";
+
+/** A scanned card waiting for the Holder to check its fields and save it. */
+export interface ScanReview {
+  /** The photo of the card's front, still in the camera's cache. */
+  front: CardImage;
+  /** The fields the Parse found, for the Holder to correct. */
+  fields: CardFields;
+  /** Fields whose Field Confidence is low, in display order, for the Holder to double-check. */
+  needsChecking: CardTextField[];
+  /** The Field Confidence of each field the Parse found, keyed as the Parse keyed them. */
+  fieldConfidences: Record<string, number>;
+}
+
+/** Below this Field Confidence, a field is flagged for the Holder to check. */
+const CHECK_BELOW_CONFIDENCE = 0.6;
 
 /**
  * The Holder's Collection: the single interface the UI calls for Scan → Parse
@@ -60,6 +91,13 @@ export interface Collection {
   list(): Promise<CardCopySummary[]>;
   /** Saves a card the Holder typed in, as a Card Copy with `source = manual`. */
   addManual(fields: CardFields): Promise<CardCopy>;
+  /** Reads a photo of a card's front and parses it, for the Holder to review before saving. */
+  scan(front: CardImage): Promise<ScanReview>;
+  /**
+   * Saves a reviewed scan to the Collection as a Card Copy with `source = scan`,
+   * using the fields as the Holder corrected them and keeping the card's photo.
+   */
+  saveScan(review: ScanReview, fields: CardFields): Promise<CardCopy>;
   /** One Card Copy, or null if there is no such card (or it was deleted). */
   get(id: string): Promise<CardCopy | null>;
   /** Replaces My Version's fields. Only ever touches the Holder's own copy (ADR 0001). */
@@ -84,17 +122,21 @@ export interface UnsyncedCard {
 interface CardCopyRow {
   id: string;
   source: CardCopy["source"];
+  parsed_by: ParsedBy | null;
   payload: string;
+  front_image: string | null;
   created_at: string;
   updated_at: string;
 }
 
 /**
  * The JSON stored in `card_copy.payload` (ADR 0003: one column holds the
- * personal fields). Later sources add more keys, such as Field Confidences.
+ * personal fields). Later sources add more keys.
  */
 interface Payload {
   fields: CardFields;
+  /** A scanned card's Field Confidences as the Parse found them, before the Holder's corrections. */
+  fieldConfidences?: Record<string, number>;
   [key: string]: unknown;
 }
 
@@ -142,6 +184,42 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
       return card;
     },
 
+    async scan(front) {
+      const recognised = await deps.ocr.recognise(front);
+      const parsed = await deps.parser.parse(recognised);
+      const fields = toCardFields(parsed);
+      return {
+        front,
+        fields,
+        needsChecking: CARD_TEXT_FIELDS.filter(
+          (key) => fields[key] !== undefined && parsed[key]!.confidence < CHECK_BELOW_CONFIDENCE,
+        ),
+        fieldConfidences: Object.fromEntries(Object.entries(parsed).map(([key, field]) => [key, field.confidence])),
+      };
+    },
+
+    async saveScan(review, corrected) {
+      const fields = cleanFields(corrected);
+      const id = deps.newId();
+      const frontImage = await deps.images.keep(review.front, `${id}-front`);
+      const now = deps.now().toISOString();
+      const card: CardCopy = {
+        id,
+        source: "scan",
+        parsedBy: "device",
+        fields,
+        frontImage,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await deps.db.execute(
+        `INSERT INTO card_copy (id, source, parsed_by, payload, front_image, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, card.source, "device", writePayload({ fields, fieldConfidences: review.fieldConfidences }), frontImage.uri, now, now],
+      );
+      return card;
+    },
+
     get,
 
     async editMyVersion(id, typed) {
@@ -177,6 +255,24 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
     },
   };
 }
+
+/** Turns a Parse's fields into card fields, leaving out any it found empty or doesn't know. */
+function toCardFields(parsed: ParsedFields): CardFields {
+  const fields: CardFields = {};
+  for (const key of CARD_TEXT_FIELDS) {
+    const value = parsed[key]?.value.trim();
+    if (value) fields[key] = value;
+  }
+  const socials = Object.entries(parsed)
+    .filter(([key]) => key.startsWith(SOCIAL_KEY_PREFIX))
+    .map(([key, field]) => ({ network: key.slice(SOCIAL_KEY_PREFIX.length), handle: field.value.trim() }))
+    .filter((social) => social.handle !== "");
+  if (socials.length > 0) fields.socials = socials;
+  return fields;
+}
+
+/** How a Parse keys social handles: `social:LinkedIn`. */
+const SOCIAL_KEY_PREFIX = "social:";
 
 /** Thrown when a card would be saved with no details at all. */
 export class CardHasNoDetails extends Error {
@@ -214,7 +310,9 @@ function toCardCopy(row: CardCopyRow): CardCopy {
   return {
     id: row.id,
     source: row.source,
+    ...(row.parsed_by ? { parsedBy: row.parsed_by } : {}),
     fields: readPayload(row).fields,
+    ...(row.front_image ? { frontImage: { uri: row.front_image } } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

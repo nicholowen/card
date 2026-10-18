@@ -2,12 +2,11 @@ import { randomUUID } from "expo-crypto";
 import { openDatabaseAsync } from "expo-sqlite";
 import { createContext, use, useEffect, useState, type ReactNode } from "react";
 import { openCollection, type Collection } from "../collection";
+import { cardScannerOcr } from "../collection/adapters/card-scanner";
 import { expoSqliteDatabase } from "../collection/adapters/expo-sqlite";
-import {
-  apiClientNotYetAvailable,
-  ocrNotYetAvailable,
-  onDeviceParserNotYetAvailable,
-} from "../collection/adapters/not-yet-available";
+import { fileSystemImageStore } from "../collection/adapters/file-system-image-store";
+import { heuristicParser } from "../collection/adapters/heuristic-parser";
+import { apiClientNotYetAvailable } from "../collection/adapters/not-yet-available";
 
 const CollectionContext = createContext<Collection | null>(null);
 
@@ -16,17 +15,19 @@ const CollectionContext = createContext<Collection | null>(null);
  * the same phone never sees the first person's Collection. Someone who hasn't
  * signed in gets their own anonymous database.
  */
-function databaseName(accountId: string | null): string {
-  return accountId ? `collection-${accountId}.db` : "collection-anonymous.db";
+function collectionName(accountId: string | null): string {
+  return accountId ? `collection-${accountId}` : "collection-anonymous";
 }
 
 async function openDeviceCollection(accountId: string | null): Promise<Collection> {
-  const db = await openDatabaseAsync(databaseName(accountId));
+  const name = collectionName(accountId);
+  const db = await openDatabaseAsync(`${name}.db`);
   return openCollection({
     db: expoSqliteDatabase(db),
-    ocr: ocrNotYetAvailable,
-    parser: onDeviceParserNotYetAvailable,
+    ocr: cardScannerOcr,
+    parser: heuristicParser,
     api: apiClientNotYetAvailable,
+    images: fileSystemImageStore(name),
     newId: randomUUID,
     now: () => new Date(),
   });

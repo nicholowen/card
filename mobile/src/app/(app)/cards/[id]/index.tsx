@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { CARD_TEXT_FIELDS, cardDisplayName } from "../../../../collection";
 import { Button } from "../../../../components/Button";
 import { CardDeleted } from "../../../../components/CardDeleted";
+import { CardPhoto } from "../../../../components/CardPhoto";
 import { CARD_FIELD_LABELS } from "../../../../components/card-field-labels";
 import { useCardCopy } from "../../../../lib/use-card-copy";
 import { useCollection } from "../../../../lib/collection-context";
@@ -61,7 +62,11 @@ export default function CardScreen() {
           ),
         }}
       />
+      {card.frontImage ? <CardPhoto image={card.frontImage} /> : null}
       <Text style={styles.name}>{cardDisplayName(fields)}</Text>
+      {card.parsedBy === "device" ? (
+        <Text style={styles.provenance}>Scanned and read on this phone</Text>
+      ) : null}
 
       {DETAIL_FIELDS.filter((key) => fields[key]).map((key) => (
         <View key={key} style={styles.detail}>
@@ -94,6 +99,7 @@ const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
   headerAction: { fontSize: 16, color: "#0a66c2" },
   name: { fontSize: 26, fontWeight: "700" },
+  provenance: { fontSize: 13, color: "#666", marginTop: -10 },
   detail: { gap: 2 },
   label: { fontSize: 13, fontWeight: "600", color: "#666", textTransform: "uppercase" },
   value: { fontSize: 17 },

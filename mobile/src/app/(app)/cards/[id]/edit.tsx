@@ -2,6 +2,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, StyleSheet } from "react-native";
 import { CardDeleted } from "../../../../components/CardDeleted";
 import { CardForm } from "../../../../components/CardForm";
+import { CardPhoto } from "../../../../components/CardPhoto";
 import { useCardCopy } from "../../../../lib/use-card-copy";
 import { useCollection } from "../../../../lib/collection-context";
 
@@ -21,6 +22,7 @@ export default function EditCardScreen() {
       ) : (
         <CardForm
           initial={card.fields}
+          header={card.frontImage ? <CardPhoto image={card.frontImage} /> : undefined}
           submitTitle="Save changes"
           onSubmit={async (fields) => {
             await collection.editMyVersion(card.id, fields);

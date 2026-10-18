@@ -36,11 +36,18 @@ export default function CollectionScreen() {
               </Link>
             ),
           headerRight: () => (
-            <Link href="/cards/new" asChild>
-              <Pressable hitSlop={8} accessibilityLabel="Add a card by hand">
-                <Text style={styles.headerAction}>Add</Text>
-              </Pressable>
-            </Link>
+            <View style={styles.headerActions}>
+              <Link href="/cards/new" asChild>
+                <Pressable hitSlop={8} accessibilityLabel="Add a card by hand">
+                  <Text style={styles.headerAction}>Add</Text>
+                </Pressable>
+              </Link>
+              <Link href="/cards/scan" asChild>
+                <Pressable hitSlop={8} accessibilityLabel="Scan a card with the camera">
+                  <Text style={[styles.headerAction, styles.primaryAction]}>Scan</Text>
+                </Pressable>
+              </Link>
+            </View>
           ),
         }}
       />
@@ -56,7 +63,7 @@ export default function CollectionScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No cards yet</Text>
-              <Text style={styles.emptyBody}>Cards you add will appear here.</Text>
+              <Text style={styles.emptyBody}>Tap Scan and point your camera at a business card.</Text>
             </View>
           }
         />
@@ -71,6 +78,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", gap: 6, padding: 24 },
   emptyTitle: { fontSize: 18, fontWeight: "600" },
   emptyBody: { fontSize: 15, color: "#666" },
+  headerActions: { flexDirection: "row", gap: 20 },
   headerAction: { fontSize: 16, color: "#0a66c2" },
+  primaryAction: { fontWeight: "600" },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: "#ddd", marginLeft: 20 },
 });
