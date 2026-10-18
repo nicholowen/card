@@ -20,8 +20,6 @@ export interface TestApi {
   storage: InMemoryObjectStorage;
   /** A new HTTP client with its own cookie jar, like a separate device. */
   client(): TestClient;
-  /** Runs SQL against this test's schema, for assertions a later request can't make. */
-  query<T extends pg.QueryResultRow = pg.QueryResultRow>(sql: string, params?: unknown[]): Promise<T[]>;
   close(): Promise<void>;
 }
 
@@ -37,7 +35,16 @@ export async function startTestApi(): Promise<TestApi> {
     connectionString: TEST_DATABASE_URL,
     options: `-c search_path=${schema}`,
   });
-  await migrate(pool);
+  const dropSchema = async () => {
+    await pool.query(`DROP SCHEMA ${schema} CASCADE`);
+    await pool.end();
+  };
+  try {
+    await migrate(pool);
+  } catch (error) {
+    await dropSchema();
+    throw error;
+  }
 
   const email = new FakeEmailSender();
   const llm = new FakeLlmProvider();
@@ -66,14 +73,9 @@ export async function startTestApi(): Promise<TestApi> {
     llm,
     storage,
     client: () => new TestClient(baseUrl),
-    async query(sql, params) {
-      const result = await pool.query(sql, params);
-      return result.rows;
-    },
     async close() {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
-      await pool.query(`DROP SCHEMA ${schema} CASCADE`);
-      await pool.end();
+      await dropSchema();
     },
   };
 }

@@ -17,8 +17,11 @@ export default function SignedInLayout() {
 
   if (!session) return <Redirect href="/sign-in" />;
 
+  // Better Auth calls the Account a "user"; the app only ever says Account.
+  const accountId = session.user.id;
+
   return (
-    <CollectionProvider accountId={session.user.id}>
+    <CollectionProvider accountId={accountId}>
       <Stack />
     </CollectionProvider>
   );

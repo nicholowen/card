@@ -36,6 +36,8 @@ npm run migrate -w api        # create the auth tables
 npm run dev -w api            # http://localhost:3000
 ```
 
+The `card_test` database is created by an init script that only runs the first time the Docker volume is created. If you already had the volume, create it by hand: `psql -h localhost -U postgres -c 'CREATE DATABASE card_test'`.
+
 There is no real email sender yet. Sign-in codes are printed to the API's console:
 
 ```

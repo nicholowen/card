@@ -1,7 +1,6 @@
 import { Redirect } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Button } from "../components/Button";
 import { authClient } from "../lib/auth-client";
 
 type Step = { kind: "email" } | { kind: "code"; email: string };
@@ -104,14 +104,6 @@ export default function SignInScreen() {
   );
 }
 
-function Button({ title, onPress, busy }: { title: string; onPress: () => void; busy: boolean }) {
-  return (
-    <Pressable style={[styles.button, busy && styles.buttonBusy]} onPress={onPress} disabled={busy}>
-      {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{title}</Text>}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
   form: { flex: 1, justifyContent: "center", padding: 24, gap: 14 },
@@ -119,9 +111,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 16, color: "#333" },
   input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 14, fontSize: 17 },
   code: { letterSpacing: 6, fontSize: 22 },
-  button: { backgroundColor: "#111", borderRadius: 10, padding: 15, alignItems: "center" },
-  buttonBusy: { opacity: 0.6 },
-  buttonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
   link: { color: "#0a66c2", fontSize: 15, textAlign: "center", padding: 8 },
   error: { color: "#b3261e", fontSize: 15 },
 });

@@ -9,7 +9,7 @@ describe("Collection", () => {
     expect(await collection.list()).toEqual([]);
   });
 
-  it("opens again on the same device database, as on the next app launch", async () => {
+  it("opens again on an existing device database, as on the next app launch", async () => {
     const { deps } = await createTestCollection();
 
     const reopened = await openCollection(deps);
