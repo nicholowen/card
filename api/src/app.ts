@@ -9,6 +9,7 @@ export interface AppConfig {
   authSecret: string;
   baseURL: string;
   trustedOrigins: string[];
+  development: boolean;
 }
 
 export function createApp(config: AppConfig) {
@@ -18,6 +19,7 @@ export function createApp(config: AppConfig) {
     secret: config.authSecret,
     baseURL: config.baseURL,
     trustedOrigins: config.trustedOrigins,
+    development: config.development,
   });
 
   const app = new Hono();

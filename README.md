@@ -54,7 +54,9 @@ Better Auth's tables are renamed to match the glossary: `account` is our Account
 
 ## Running the app
 
-The app uses native modules (expo-sqlite, expo-secure-store, and soon on-device OCR), so it runs as a **development build**, not in Expo Go.
+The app is meant to run as a **development build**. Expo Go works for now, because everything the app uses so far ships inside Expo Go, but it will stop working once on-device OCR lands.
+
+The API only accepts sign-in requests from origins it trusts. The app's own `card://` scheme is always trusted. Expo Go sends `exp://…` instead, which is trusted unless `NODE_ENV=production`. If sign-in fails with "Invalid origin", the API console logs the origin it rejected.
 
 ```sh
 cp mobile/.env.example mobile/.env   # set EXPO_PUBLIC_API_URL (see below)

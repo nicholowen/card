@@ -20,10 +20,21 @@ export interface TestApi {
   storage: InMemoryObjectStorage;
   /** A new HTTP client with its own cookie jar, like a separate device. */
   client(): TestClient;
+  /**
+   * A client that talks like the mobile app: Better Auth's Expo client sends
+   * no Origin header, only `expo-origin` with the app's deep-link URL
+   * (e.g. `card://192.168.1.20:8081` in a dev build, `exp://…` in Expo Go).
+   */
+  appClient(appOrigin: string): TestClient;
   close(): Promise<void>;
 }
 
-export async function startTestApi(): Promise<TestApi> {
+export interface TestApiOptions {
+  /** Run with development settings (trusts Expo Go). Defaults to production-like. */
+  development?: boolean;
+}
+
+export async function startTestApi(options: TestApiOptions = {}): Promise<TestApi> {
   const schema = `test_${randomBytes(6).toString("hex")}`;
 
   const admin = new pg.Client({ connectionString: TEST_DATABASE_URL });
@@ -64,6 +75,7 @@ export async function startTestApi(): Promise<TestApi> {
     authSecret: randomBytes(32).toString("base64"),
     baseURL: baseUrl,
     trustedOrigins: [baseUrl],
+    development: options.development ?? false,
   });
   handle = (request) => app.fetch(request);
 
@@ -72,7 +84,8 @@ export async function startTestApi(): Promise<TestApi> {
     email,
     llm,
     storage,
-    client: () => new TestClient(baseUrl),
+    client: () => new TestClient(baseUrl, { origin: baseUrl }),
+    appClient: (appOrigin) => new TestClient(baseUrl, { "expo-origin": appOrigin }),
     async close() {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
       await dropSchema();
@@ -89,7 +102,10 @@ export interface TestResponse<T = unknown> {
 export class TestClient {
   private readonly cookies = new Map<string, string>();
 
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly originHeaders: Record<string, string>,
+  ) {}
 
   get<T = unknown>(path: string) {
     return this.request<T>("GET", path);
@@ -100,7 +116,7 @@ export class TestClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<TestResponse<T>> {
-    const headers: Record<string, string> = { origin: this.baseUrl };
+    const headers: Record<string, string> = { ...this.originHeaders };
     if (body !== undefined) headers["content-type"] = "application/json";
     if (this.cookies.size > 0) {
       headers.cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; ");

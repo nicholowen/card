@@ -10,7 +10,8 @@ export function loadConfig() {
     databaseUrl: required("DATABASE_URL"),
     authSecret: required("BETTER_AUTH_SECRET"),
     baseURL: required("BETTER_AUTH_URL"),
-    trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "card://")
+    development: process.env.NODE_ENV !== "production",
+    trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "")
       .split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),

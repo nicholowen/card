@@ -14,6 +14,7 @@ export async function migrate(pool: Pool): Promise<void> {
     secret: "migration-only-secret-not-used-for-signing",
     baseURL: "http://localhost",
     trustedOrigins: [],
+    development: false,
   });
   const { runMigrations } = await getMigrations(options);
   await runMigrations();
