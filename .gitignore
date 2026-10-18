@@ -9,5 +9,8 @@ coverage/
 .expo-shared/
 ios/
 android/
+# Except native code of the app's own Expo modules, which isn't generated.
+!mobile/modules/*/ios/
+!mobile/modules/*/android/
 *.log
 .DS_Store
