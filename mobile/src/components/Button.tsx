@@ -16,7 +16,7 @@ export function Button({
   const outline = variant === "outline";
   return (
     <Pressable
-      style={[styles.button, outline && styles.outline, (busy || disabled) && styles.busy]}
+      style={[styles.button, outline && styles.outline, (busy || disabled) && styles.inactive]}
       onPress={onPress}
       disabled={busy || disabled}
     >
@@ -32,7 +32,7 @@ export function Button({
 const styles = StyleSheet.create({
   button: { backgroundColor: "#111", borderRadius: 10, padding: 15, alignItems: "center" },
   outline: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#111" },
-  busy: { opacity: 0.6 },
+  inactive: { opacity: 0.6 },
   text: { color: "#fff", fontSize: 17, fontWeight: "600" },
   outlineText: { color: "#111" },
 });

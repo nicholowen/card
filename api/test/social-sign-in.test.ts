@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { SocialProviderId } from "../src/ports.ts";
 import { startTestApi, type TestApi, type TestClient } from "./harness.ts";
 
 interface Session {
@@ -8,7 +9,7 @@ interface Session {
 /** What the app sends after native sign-in: the provider's ID token, no cookie. */
 function signInWithIdToken(
   phone: TestClient,
-  provider: "google" | "apple",
+  provider: SocialProviderId,
   idToken: { token: string; nonce?: string; user?: { name?: { firstName?: string; lastName?: string } } },
 ) {
   return phone.post("/api/auth/sign-in/social", { provider, idToken });
@@ -51,7 +52,7 @@ describe("signing in with Google or Apple", () => {
     expect(session.body.user).toMatchObject({ email: "owen@example.com", name: "Owen Nicholson", role: "member" });
   });
 
-  it("signs a returning Google user into the same Account on another device", async () => {
+  it("signs a person who used Google before into the same Account on another device", async () => {
     const identity = { subject: "google-owen", email: "owen@example.com", emailVerified: true, name: "Owen" };
 
     const firstPhone = api.appClient("card://");

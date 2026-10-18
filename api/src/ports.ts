@@ -31,21 +31,13 @@ export interface ObjectStorage {
 
 export type SocialProviderId = "google" | "apple";
 
-/** Who a social provider says signed in, read from an ID token it issued. */
-export interface VerifiedIdentity {
-  /** The provider's stable ID for the person (the token's `sub`). */
-  subject: string;
-  email?: string;
-  emailVerified: boolean;
-  name?: string;
-}
-
 /**
- * Checks ID tokens that the app got from Google or Apple through native sign-in.
- * Returns null for a token the provider didn't issue, or one issued for a different nonce.
+ * Checks that an ID token the app got from Google or Apple through native sign-in
+ * really was issued by that provider for this app (and, when given, for this nonce).
+ * Better Auth reads the person's details from the token once it passes.
  */
 export interface IdentityTokenVerifier {
-  verify(provider: SocialProviderId, token: string, nonce?: string): Promise<VerifiedIdentity | null>;
+  verify(provider: SocialProviderId, token: string, nonce?: string): Promise<boolean>;
 }
 
 export interface Ports {
@@ -53,8 +45,10 @@ export interface Ports {
   llm: LlmProvider;
   storage: ObjectStorage;
   /**
-   * Leave unset in production: Better Auth then verifies ID tokens itself against
-   * Google's and Apple's published signing keys. Tests set it to a fake provider.
+   * Unset in production, where Better Auth checks ID-token signatures against
+   * Google's and Apple's published keys. Tests set it to a fake provider, since
+   * they can't get tokens signed by the real ones. Only the signature check is
+   * replaced: reading the token's profile is still Better Auth's own code.
    */
   identityTokens?: IdentityTokenVerifier;
 }

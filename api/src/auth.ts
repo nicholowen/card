@@ -1,8 +1,6 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { expo } from "@better-auth/expo";
-import type { OAuth2Tokens } from "better-auth/oauth2";
-import type { AppleProfile, GoogleProfile } from "better-auth/social-providers";
 import type { Pool } from "pg";
 import type { EmailSender, IdentityTokenVerifier, SocialProviderId } from "./ports.ts";
 
@@ -70,7 +68,7 @@ export function authOptions(config: AuthConfig) {
         google: {
           clientId: google.clientId,
           clientSecret: google.clientSecret,
-          ...verifiedBy<GoogleProfile>(config.identityTokens, "google"),
+          ...verifiedBy(config.identityTokens, "google"),
         },
       }),
       ...(apple && {
@@ -82,7 +80,7 @@ export function authOptions(config: AuthConfig) {
             apple.appBundleIdentifier,
             ...(config.development ? [EXPO_GO_BUNDLE_IDENTIFIER] : []),
           ],
-          ...verifiedBy<AppleProfile>(config.identityTokens, "apple"),
+          ...verifiedBy(config.identityTokens, "apple"),
         },
       }),
     },
@@ -118,32 +116,11 @@ export function authOptions(config: AuthConfig) {
   } satisfies BetterAuthOptions;
 }
 
-/**
- * Provider options that hand ID-token checks to our own verifier instead of
- * Better Auth's built-in check against the provider's published keys.
- */
-function verifiedBy<Profile>(verifier: IdentityTokenVerifier | undefined, provider: SocialProviderId) {
+/** Provider options that hand the ID-token signature check to our own verifier. */
+function verifiedBy(verifier: IdentityTokenVerifier | undefined, provider: SocialProviderId) {
   if (!verifier) return {};
   return {
-    async verifyIdToken(token: string, nonce?: string) {
-      return (await verifier.verify(provider, token, nonce)) !== null;
-    },
-    async getUserInfo(tokens: OAuth2Tokens) {
-      if (!tokens.idToken) return null;
-      const identity = await verifier.verify(provider, tokens.idToken);
-      if (!identity) return null;
-      // Apple shares the person's name only on their first sign-in, and only to
-      // the app, which passes it along beside the token.
-      const appleName = (tokens as { user?: { name?: { firstName?: string; lastName?: string } } }).user?.name;
-      const sharedName = appleName && [appleName.firstName, appleName.lastName].filter(Boolean).join(" ");
-      const name = sharedName || identity.name || "";
-      return {
-        user: { email: identity.email, emailVerified: identity.emailVerified, name },
-        // Better Auth keys the sign-in method on the profile's `sub`; the rest of
-        // the provider-specific profile shape isn't needed.
-        data: { sub: identity.subject, email: identity.email, name } as Profile,
-      };
-    },
+    verifyIdToken: (token: string, nonce?: string) => verifier.verify(provider, token, nonce),
   };
 }
 

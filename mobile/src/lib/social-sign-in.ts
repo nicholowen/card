@@ -37,9 +37,9 @@ async function signInWithNativeApple(): Promise<SocialSignInResult> {
     });
   } catch (error) {
     if ((error as { code?: string }).code === "ERR_REQUEST_CANCELED") return { kind: "cancelled" };
-    return failed("apple");
+    return failure("apple");
   }
-  if (!credential.identityToken) return failed("apple");
+  if (!credential.identityToken) return failure("apple");
 
   // Apple shares the name only on the first sign-in, and only with the app.
   const { givenName, familyName } = credential.fullName ?? {};
@@ -50,7 +50,7 @@ async function signInWithNativeApple(): Promise<SocialSignInResult> {
     provider: "apple",
     idToken: { token: credential.identityToken, nonce, ...(name && { user: { name } }) },
   });
-  return error ? failedFrom("apple", error) : { kind: "signed-in" };
+  return error ? failureFromResponse("apple", error) : { kind: "signed-in" };
 }
 
 /**
@@ -59,7 +59,7 @@ async function signInWithNativeApple(): Promise<SocialSignInResult> {
  */
 async function signInInBrowser(provider: SocialProvider): Promise<SocialSignInResult> {
   const { error } = await authClient.signIn.social({ provider, callbackURL: "/" });
-  if (error) return failedFrom(provider, error);
+  if (error) return failureFromResponse(provider, error);
 
   // The browser closes the same way whether the person finished or backed out,
   // so whether a session now exists is what tells them apart.
@@ -67,14 +67,15 @@ async function signInInBrowser(provider: SocialProvider): Promise<SocialSignInRe
   return session ? { kind: "signed-in" } : { kind: "cancelled" };
 }
 
-function failedFrom(provider: SocialProvider, error: { status: number }): SocialSignInResult {
+/** 404 means the server isn't configured for this provider. */
+function failureFromResponse(provider: SocialProvider, error: { status: number }): SocialSignInResult {
   if (error.status === 404) {
     return { kind: "failed", message: `Signing in with ${PROVIDER_NAMES[provider]} isn't available yet. Use your email instead.` };
   }
-  return failed(provider);
+  return failure(provider);
 }
 
-function failed(provider: SocialProvider): SocialSignInResult {
+function failure(provider: SocialProvider): SocialSignInResult {
   return {
     kind: "failed",
     message: `Couldn't sign in with ${PROVIDER_NAMES[provider]}. Try again, or sign in with your email.`,

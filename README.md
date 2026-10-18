@@ -99,7 +99,7 @@ npm test -w mobile   # the Collection module, against in-memory SQLite
 npm run typecheck    # both workspaces
 ```
 
-**API (`api/test/`)**: each test calls `startTestApi()`, which creates a fresh Postgres schema in `card_test`, runs migrations into it, and starts the API on a random port with in-process fakes for email, the LLM provider and object storage. Tests talk to it with `TestClient` (keeps cookies like a phone would) and read emailed codes from `api.email`. The schema is dropped in `close()`. Point at another database with `TEST_DATABASE_URL`.
+**API (`api/test/`)**: each test calls `startTestApi()`, which creates a fresh Postgres schema in `card_test`, runs migrations into it, and starts the API on a random port with in-process fakes for email, the LLM provider, object storage and Google/Apple (`api.identity` issues the ID tokens native sign-in would get; only the signature check is faked, so Better Auth reads them as it reads real ones). Tests talk to it with `TestClient` (keeps cookies like a phone would) and read emailed codes from `api.email`. The schema is dropped in `close()`. Point at another database with `TEST_DATABASE_URL`.
 
 **Collection (`mobile/test/`)**: `createTestCollection()` opens the Collection against an in-memory SQLite database with fake OCR, a fake on-device parser and a fake API client. Tests only use the `Collection` interface, never the database directly. This suite doesn't load React Native, so it runs in plain Node.
 

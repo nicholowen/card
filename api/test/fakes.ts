@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type {
   EmailSender,
   IdentityTokenVerifier,
@@ -7,7 +7,6 @@ import type {
   OneTimeCodePurpose,
   ParsedFields,
   SocialProviderId,
-  VerifiedIdentity,
 } from "../src/ports.ts";
 
 export class FakeEmailSender implements EmailSender {
@@ -59,28 +58,65 @@ export class InMemoryObjectStorage implements ObjectStorage {
   }
 }
 
+/** A person as Google or Apple would describe them in an ID token. */
+export interface FakeIdentity {
+  /** The provider's stable ID for the person (the token's `sub`). */
+  subject: string;
+  email?: string;
+  emailVerified: boolean;
+  /** Google puts the name in the token. Apple never does: the app passes it alongside. */
+  name?: string;
+}
+
+const ISSUERS: Record<SocialProviderId, string> = {
+  google: "https://accounts.google.com",
+  apple: "https://appleid.apple.com",
+};
+
 /**
  * Stands in for Google and Apple. Tests ask it to issue an ID token for a person,
- * as the provider would after native sign-in on the phone, and the API checks
- * tokens against it. Any token it didn't issue is rejected.
+ * as the provider would after native sign-in on the phone. The tokens are real
+ * JWTs with the provider's claims, so Better Auth reads them exactly as it reads
+ * the real thing; only the signature is ours, and only this fake accepts it.
  */
 export class FakeIdentityProviders implements IdentityTokenVerifier {
-  private readonly issued = new Map<
-    string,
-    { provider: SocialProviderId; identity: VerifiedIdentity; nonce?: string }
-  >();
+  private readonly signingKey = randomBytes(32);
 
-  issue(provider: SocialProviderId, identity: VerifiedIdentity, options: { nonce?: string } = {}): string {
-    const token = `fake-${provider}-id-token-${randomBytes(8).toString("hex")}`;
-    this.issued.set(token, { provider, identity, nonce: options.nonce });
-    return token;
+  issue(provider: SocialProviderId, identity: FakeIdentity, options: { nonce?: string } = {}): string {
+    const now = Math.floor(Date.now() / 1000);
+    const claims = {
+      iss: ISSUERS[provider],
+      sub: identity.subject,
+      iat: now,
+      exp: now + 3600,
+      ...(identity.email !== undefined && { email: identity.email }),
+      email_verified: identity.emailVerified,
+      ...(provider === "google" && identity.name !== undefined && { name: identity.name }),
+      ...(options.nonce !== undefined && { nonce: options.nonce }),
+    };
+    const unsigned = `${encode({ alg: "HS256", typ: "JWT" })}.${encode(claims)}`;
+    return `${unsigned}.${this.sign(unsigned)}`;
   }
 
   async verify(provider: SocialProviderId, token: string, nonce?: string) {
-    const issued = this.issued.get(token);
-    if (!issued || issued.provider !== provider) return null;
+    const [header, payload, signature] = token.split(".");
+    if (!header || !payload || !signature) return false;
+    const expected = Buffer.from(this.sign(`${header}.${payload}`));
+    const given = Buffer.from(signature);
+    if (expected.length !== given.length || !timingSafeEqual(expected, given)) return false;
+
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as { iss: string; nonce?: string };
+    if (claims.iss !== ISSUERS[provider]) return false;
     // Like a real ID token: a nonce presented with the token must be the one it was issued for.
-    if (nonce !== undefined && nonce !== issued.nonce) return null;
-    return issued.identity;
+    if (nonce !== undefined && nonce !== claims.nonce) return false;
+    return true;
   }
+
+  private sign(unsigned: string) {
+    return createHmac("sha256", this.signingKey).update(unsigned).digest("base64url");
+  }
+}
+
+function encode(value: object) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
