@@ -1,0 +1,12 @@
+{
+  "name": "card",
+  "private": true,
+  "workspaces": [
+    "api",
+    "mobile"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces"
+  }
+}
