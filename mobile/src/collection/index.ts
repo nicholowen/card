@@ -20,6 +20,10 @@ export interface SocialHandle {
   handle: string;
 }
 
+/** The single-line text fields of a card, in display order. */
+export const CARD_TEXT_FIELDS = ["name", "jobTitle", "company", "email", "phone", "website", "address"] as const;
+export type CardTextField = (typeof CARD_TEXT_FIELDS)[number];
+
 /** The fields of a card, as the Holder sees them on My Version. */
 export interface CardFields {
   name?: string;
@@ -33,11 +37,8 @@ export interface CardFields {
 }
 
 /** A Card Copy as the Collection list shows it. */
-export interface CardCopySummary {
+export interface CardCopySummary extends Pick<CardFields, "name" | "jobTitle" | "company"> {
   id: string;
-  name?: string;
-  jobTitle?: string;
-  company?: string;
   createdAt: string;
 }
 
@@ -68,12 +69,12 @@ export interface Collection {
    * rather than removed, so the deletion can reach the server on the next sync.
    */
   delete(id: string): Promise<void>;
-  /** Card Copies created, edited or deleted on this device since they last reached the server. */
-  unsyncedChanges(): Promise<UnsyncedChange[]>;
+  /** Unsynced Cards: Card Copies created, edited or deleted on this device since they last reached the server. */
+  unsyncedCards(): Promise<UnsyncedCard[]>;
 }
 
-/** A Card Copy whose latest change hasn't reached the server yet. */
-export interface UnsyncedChange {
+/** A Card Copy whose latest change, possibly its deletion, hasn't reached the server yet. */
+export interface UnsyncedCard {
   id: string;
   updatedAt: string;
   /** Set when the change is a deletion. */
@@ -88,19 +89,28 @@ interface CardCopyRow {
   updated_at: string;
 }
 
-/** The JSON stored in `card_copy.payload` (ADR 0003: one column holds the personal fields). */
+/**
+ * The JSON stored in `card_copy.payload` (ADR 0003: one column holds the
+ * personal fields). Later sources add more keys, such as Field Confidences.
+ */
 interface Payload {
   fields: CardFields;
+  [key: string]: unknown;
 }
 
 export async function openCollection(deps: CollectionDependencies): Promise<Collection> {
   await migrateLocalDatabase(deps.db);
 
-  async function get(id: string): Promise<CardCopy | null> {
+  async function getRow(id: string): Promise<CardCopyRow | undefined> {
     const [row] = await deps.db.all<CardCopyRow>(
       "SELECT * FROM card_copy WHERE id = ? AND deleted_at IS NULL",
       [id],
     );
+    return row;
+  }
+
+  async function get(id: string): Promise<CardCopy | null> {
+    const row = await getRow(id);
     return row ? toCardCopy(row) : null;
   }
 
@@ -125,10 +135,9 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
       const fields = cleanFields(typed);
       const now = deps.now().toISOString();
       const card: CardCopy = { id: deps.newId(), source: "manual", fields, createdAt: now, updatedAt: now };
-      const payload: Payload = { fields: card.fields };
       await deps.db.execute(
         "INSERT INTO card_copy (id, source, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        [card.id, card.source, JSON.stringify(payload), card.createdAt, card.updatedAt],
+        [card.id, card.source, writePayload({ fields }), card.createdAt, card.updatedAt],
       );
       return card;
     },
@@ -137,16 +146,17 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
 
     async editMyVersion(id, typed) {
       const fields = cleanFields(typed);
-      const existing = await get(id);
-      if (!existing) throw new CardCopyNotFound(id);
-      const card: CardCopy = { ...existing, fields, updatedAt: deps.now().toISOString() };
-      const payload: Payload = { fields: card.fields };
+      const row = await getRow(id);
+      if (!row) throw new CardCopyNotFound(id);
+      const updatedAt = deps.now().toISOString();
+      // Replace only the fields, keeping anything else the payload carries.
+      const payload: Payload = { ...readPayload(row), fields };
       await deps.db.execute("UPDATE card_copy SET payload = ?, updated_at = ? WHERE id = ?", [
-        JSON.stringify(payload),
-        card.updatedAt,
+        writePayload(payload),
+        updatedAt,
         id,
       ]);
-      return card;
+      return { ...toCardCopy(row), fields, updatedAt };
     },
 
     async delete(id) {
@@ -157,7 +167,7 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
       );
     },
 
-    async unsyncedChanges() {
+    async unsyncedCards() {
       const rows = await deps.db.all<{ id: string; updated_at: string; deleted_at: string | null }>(
         `SELECT id, updated_at, deleted_at FROM card_copy
          WHERE synced_at IS NULL OR updated_at > synced_at
@@ -169,19 +179,17 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
 }
 
 /** Thrown when a card would be saved with no details at all. */
-export class EmptyCard extends Error {
+export class CardHasNoDetails extends Error {
   constructor() {
     super("A card needs at least one detail");
-    this.name = "EmptyCard";
+    this.name = "CardHasNoDetails";
   }
 }
-
-const TEXT_FIELDS = ["name", "jobTitle", "company", "email", "phone", "website", "address"] as const;
 
 /** Trims what the Holder typed and leaves out anything blank. */
 function cleanFields(typed: CardFields): CardFields {
   const fields: CardFields = {};
-  for (const key of TEXT_FIELDS) {
+  for (const key of CARD_TEXT_FIELDS) {
     const value = typed[key]?.trim();
     if (value) fields[key] = value;
   }
@@ -190,7 +198,7 @@ function cleanFields(typed: CardFields): CardFields {
     .filter((social) => social.handle !== "");
   if (socials.length > 0) fields.socials = socials;
 
-  if (Object.keys(fields).length === 0) throw new EmptyCard();
+  if (Object.keys(fields).length === 0) throw new CardHasNoDetails();
   return fields;
 }
 
@@ -210,6 +218,15 @@ function toCardCopy(row: CardCopyRow): CardCopy {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function writePayload(payload: Payload): string {
+  return JSON.stringify(payload);
+}
+
+/** What the Collection list and card screen call a card: its name, else its company. */
+export function cardDisplayName(fields: Pick<CardFields, "name" | "company">): string {
+  return fields.name ?? fields.company ?? "Unnamed card";
 }
 
 function readPayload(row: CardCopyRow): Payload {

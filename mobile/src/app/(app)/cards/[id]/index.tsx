@@ -1,32 +1,22 @@
-import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { Link, router, Stack, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { CardCopy, CardFields } from "../../../../collection";
+import { CARD_TEXT_FIELDS, cardDisplayName } from "../../../../collection";
 import { Button } from "../../../../components/Button";
+import { CardDeleted } from "../../../../components/CardDeleted";
+import { CARD_FIELD_LABELS } from "../../../../components/card-field-labels";
+import { useCardCopy } from "../../../../lib/use-card-copy";
 import { useCollection } from "../../../../lib/collection-context";
 
-const DETAIL_ROWS: { key: Exclude<keyof CardFields, "socials" | "name">; label: string }[] = [
-  { key: "jobTitle", label: "Job title" },
-  { key: "company", label: "Company" },
-  { key: "email", label: "Email" },
-  { key: "phone", label: "Phone" },
-  { key: "website", label: "Website" },
-  { key: "address", label: "Address" },
-];
+/** Every field except the name, which is the card's heading. */
+const DETAIL_FIELDS = CARD_TEXT_FIELDS.filter((key) => key !== "name");
 
 /** One Card Copy: My Version, with edit and delete. */
 export default function CardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const collection = useCollection();
-  const [card, setCard] = useState<CardCopy | null | undefined>(undefined);
+  const card = useCardCopy(id);
   const [deleting, setDeleting] = useState(false);
-
-  // Reload on focus so returning from the edit screen shows the change.
-  useFocusEffect(
-    useCallback(() => {
-      collection?.get(id).then(setCard);
-    }, [collection, id]),
-  );
 
   function confirmDelete() {
     if (!collection || !card) return;
@@ -48,10 +38,10 @@ export default function CardScreen() {
 
   if (card === null) {
     return (
-      <View style={styles.centre}>
+      <>
         <Stack.Screen options={{ title: "Card" }} />
-        <Text style={styles.empty}>This card has been deleted.</Text>
-      </View>
+        <CardDeleted />
+      </>
     );
   }
 
@@ -71,11 +61,11 @@ export default function CardScreen() {
           ),
         }}
       />
-      <Text style={styles.name}>{fields.name ?? fields.company ?? "Unnamed card"}</Text>
+      <Text style={styles.name}>{cardDisplayName(fields)}</Text>
 
-      {DETAIL_ROWS.filter(({ key }) => fields[key]).map(({ key, label }) => (
+      {DETAIL_FIELDS.filter((key) => fields[key]).map((key) => (
         <View key={key} style={styles.detail}>
-          <Text style={styles.label}>{label}</Text>
+          <Text style={styles.label}>{CARD_FIELD_LABELS[key]}</Text>
           <Text style={styles.value} selectable>
             {fields[key]}
           </Text>
@@ -102,7 +92,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
   content: { padding: 20, gap: 16 },
   centre: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
-  empty: { fontSize: 16, color: "#666" },
   headerAction: { fontSize: 16, color: "#0a66c2" },
   name: { fontSize: 26, fontWeight: "700" },
   detail: { gap: 2 },

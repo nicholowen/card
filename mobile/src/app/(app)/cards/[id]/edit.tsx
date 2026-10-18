@@ -1,19 +1,15 @@
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import type { CardCopy } from "../../../../collection";
+import { ActivityIndicator, StyleSheet } from "react-native";
+import { CardDeleted } from "../../../../components/CardDeleted";
 import { CardForm } from "../../../../components/CardForm";
+import { useCardCopy } from "../../../../lib/use-card-copy";
 import { useCollection } from "../../../../lib/collection-context";
 
 /** Edit My Version: the Holder's own copy of the card (ADR 0001). */
 export default function EditCardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const collection = useCollection();
-  const [card, setCard] = useState<CardCopy | null | undefined>(undefined);
-
-  useEffect(() => {
-    collection?.get(id).then(setCard);
-  }, [collection, id]);
+  const card = useCardCopy(id);
 
   return (
     <>
@@ -21,9 +17,7 @@ export default function EditCardScreen() {
       {card === undefined || !collection ? (
         <ActivityIndicator style={styles.centre} />
       ) : card === null ? (
-        <View style={styles.centre}>
-          <Text style={styles.missing}>This card has been deleted.</Text>
-        </View>
+        <CardDeleted />
       ) : (
         <CardForm
           initial={card.fields}
@@ -40,5 +34,4 @@ export default function EditCardScreen() {
 
 const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
-  missing: { fontSize: 16, color: "#666" },
 });

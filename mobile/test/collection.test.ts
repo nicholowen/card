@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CardCopyNotFound, EmptyCard, openCollection } from "../src/collection";
+import { CardCopyNotFound, CardHasNoDetails, openCollection } from "../src/collection";
 import { createTestCollection } from "./harness";
 
 describe("Collection", () => {
@@ -80,8 +80,8 @@ describe("Collection", () => {
       const { collection } = await createTestCollection();
       const { id } = await collection.addManual({ name: "Aroha Ngata" });
 
-      await expect(collection.addManual({ name: " ", socials: [] })).rejects.toThrow(EmptyCard);
-      await expect(collection.editMyVersion(id, { company: "" })).rejects.toThrow(EmptyCard);
+      await expect(collection.addManual({ name: " ", socials: [] })).rejects.toThrow(CardHasNoDetails);
+      await expect(collection.editMyVersion(id, { company: "" })).rejects.toThrow(CardHasNoDetails);
       expect(await collection.list()).toHaveLength(1);
       expect((await collection.get(id))?.fields).toEqual({ name: "Aroha Ngata" });
     });
@@ -118,14 +118,14 @@ describe("Collection", () => {
       expect(await collection.get(deleted.id)).toBeNull();
     });
 
-    it("keeps the deletion as an Unsynced change, so it reaches the server on the next sync", async () => {
+    it("leaves it as an Unsynced Card, so the deletion it reaches the server on the next sync", async () => {
       const { collection, clock } = await createTestCollection();
       const { id } = await collection.addManual({ name: "Aroha Ngata" });
       clock.advance(5);
 
       await collection.delete(id);
 
-      expect(await collection.unsyncedChanges()).toEqual([
+      expect(await collection.unsyncedCards()).toEqual([
         { id, updatedAt: "2026-10-19T09:05:00.000Z", deletedAt: "2026-10-19T09:05:00.000Z" },
       ]);
     });

@@ -10,24 +10,26 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
-import { EmptyCard, type CardFields, type SocialHandle } from "../collection";
+import {
+  CARD_TEXT_FIELDS,
+  CardHasNoDetails,
+  type CardFields,
+  type CardTextField,
+  type SocialHandle,
+} from "../collection";
 import { Button } from "./Button";
+import { CARD_FIELD_LABELS } from "./card-field-labels";
 
-type TextField = Exclude<keyof CardFields, "socials">;
-
-const TEXT_FIELDS: { key: TextField; label: string; input: TextInputProps }[] = [
-  { key: "name", label: "Name", input: { autoCapitalize: "words", textContentType: "name" } },
-  { key: "jobTitle", label: "Job title", input: { autoCapitalize: "words", textContentType: "jobTitle" } },
-  { key: "company", label: "Company", input: { autoCapitalize: "words", textContentType: "organizationName" } },
-  {
-    key: "email",
-    label: "Email",
-    input: { autoCapitalize: "none", keyboardType: "email-address", textContentType: "emailAddress" },
-  },
-  { key: "phone", label: "Phone", input: { keyboardType: "phone-pad", textContentType: "telephoneNumber" } },
-  { key: "website", label: "Website", input: { autoCapitalize: "none", keyboardType: "url", textContentType: "URL" } },
-  { key: "address", label: "Address", input: { multiline: true, textContentType: "fullStreetAddress" } },
-];
+/** Keyboard and autofill hints for each field. */
+const INPUT_PROPS: Record<CardTextField, TextInputProps> = {
+  name: { autoCapitalize: "words", textContentType: "name" },
+  jobTitle: { autoCapitalize: "words", textContentType: "jobTitle" },
+  company: { autoCapitalize: "words", textContentType: "organizationName" },
+  email: { autoCapitalize: "none", keyboardType: "email-address", textContentType: "emailAddress" },
+  phone: { keyboardType: "phone-pad", textContentType: "telephoneNumber" },
+  website: { autoCapitalize: "none", keyboardType: "url", textContentType: "URL" },
+  address: { multiline: true, textContentType: "fullStreetAddress" },
+};
 
 /** The fields of a card as the Holder types them. Blank values are fine; the Collection drops them. */
 export function CardForm({
@@ -54,7 +56,7 @@ export function CardForm({
     try {
       await onSubmit({ ...fields, socials });
     } catch (e) {
-      setError(e instanceof EmptyCard ? "Add at least one detail, such as a name." : "Couldn't save this card.");
+      setError(e instanceof CardHasNoDetails ? "Add at least one detail, such as a name." : "Couldn't save this card.");
       setBusy(false);
     }
   }
@@ -62,19 +64,22 @@ export function CardForm({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        {TEXT_FIELDS.map(({ key, label, input }) => (
-          <View key={key} style={styles.field}>
-            <Text style={styles.label}>{label}</Text>
-            <TextInput
-              style={[styles.input, input.multiline && styles.multiline]}
-              value={fields[key] ?? ""}
-              onChangeText={(value) => setFields((current) => ({ ...current, [key]: value }))}
-              autoCorrect={false}
-              editable={!busy}
-              {...input}
-            />
-          </View>
-        ))}
+        {CARD_TEXT_FIELDS.map((key) => {
+          const input = INPUT_PROPS[key];
+          return (
+            <View key={key} style={styles.field}>
+              <Text style={styles.label}>{CARD_FIELD_LABELS[key]}</Text>
+              <TextInput
+                style={[styles.input, input.multiline && styles.multiline]}
+                value={fields[key] ?? ""}
+                onChangeText={(value) => setFields((current) => ({ ...current, [key]: value }))}
+                autoCorrect={false}
+                editable={!busy}
+                {...input}
+              />
+            </View>
+          );
+        })}
 
         <Text style={styles.label}>Social</Text>
         {socials.map((social, index) => (

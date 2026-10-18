@@ -2,6 +2,7 @@ import { Link, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { CardCopySummary } from "../../collection";
+import { CardRow } from "../../components/CardRow";
 import { authClient } from "../../lib/auth-client";
 import { useCollection } from "../../lib/collection-context";
 
@@ -64,19 +65,6 @@ export default function CollectionScreen() {
   );
 }
 
-function CardRow({ card }: { card: CardCopySummary }) {
-  const title = card.name ?? card.company ?? "Unnamed card";
-  const subtitle = [card.jobTitle, card.name ? card.company : undefined].filter(Boolean).join(" · ");
-  return (
-    <Link href={{ pathname: "/cards/[id]", params: { id: card.id } }} asChild>
-      <Pressable style={styles.row}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
-      </Pressable>
-    </Link>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
   centre: { flexGrow: 1, alignItems: "center", justifyContent: "center" },
@@ -84,8 +72,5 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: "600" },
   emptyBody: { fontSize: 15, color: "#666" },
   headerAction: { fontSize: 16, color: "#0a66c2" },
-  row: { paddingHorizontal: 20, paddingVertical: 14, gap: 2 },
-  rowTitle: { fontSize: 17, fontWeight: "600" },
-  rowSubtitle: { fontSize: 15, color: "#666" },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: "#ddd", marginLeft: 20 },
 });
