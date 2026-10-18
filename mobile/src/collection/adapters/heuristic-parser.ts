@@ -1,4 +1,4 @@
-import type { OnDeviceParser, ParsedFields, RecognisedLine, RecognisedText } from "../ports";
+import { socialFieldKey, type OnDeviceParser, type ParsedFields, type RecognisedLine, type RecognisedText } from "../ports";
 
 // The fallback on-device Parse (ADR 0004) for devices without an on-device
 // model: contact details by pattern, then name, job title and company from
@@ -18,7 +18,8 @@ export const heuristicParser: OnDeviceParser = {
   async parse(recognised: RecognisedText): Promise<ParsedFields> {
     const lines: Line[] = recognised.lines
       .map((line) => ({ ...line, text: line.text.trim(), claimed: false }))
-      .filter((line) => line.text !== "");
+      .filter((line) => line.text !== "")
+      .sort(readingOrder);
     const fields: ParsedFields = {};
 
     const phones: Array<{ number: string; mobile: boolean }> = [];
@@ -29,12 +30,16 @@ export const heuristicParser: OnDeviceParser = {
       if (email) {
         line.claimed = true;
         fields.email ??= { value: email.toLowerCase(), confidence: 0.95 };
+        // Some cards print the phone number on the same line, after a separator.
+        const rest = line.text.replace(email, " ");
+        const phone = isPhoneLine(rest) ? rest.match(PHONE)?.[0] : undefined;
+        if (phone) phones.push({ number: phone.trim(), mobile: MOBILE_LABEL.test(rest.slice(0, rest.indexOf(phone))) });
         continue;
       }
       const social = matchSocial(line.text);
       if (social) {
         line.claimed = true;
-        fields[`social:${social.network}`] ??= { value: social.handle, confidence: 0.9 };
+        fields[socialFieldKey(social.network)] ??= { value: social.handle, confidence: 0.9 };
         continue;
       }
       if (STREET.test(line.text)) {
@@ -102,6 +107,17 @@ function claimAddress(lines: Line[], first: Line): string {
   }
   for (const part of parts) part.claimed = true;
   return parts.map((part) => part.text.replace(/,\s*$/, "")).join(", ");
+}
+
+/**
+ * Top to bottom, then left to right for lines side by side. OCR doesn't
+ * promise any order, and the layout rules (an address's next line, the job
+ * title under the name) depend on it.
+ */
+function readingOrder(a: RecognisedLine, b: RecognisedLine): number {
+  const middle = (line: RecognisedLine) => line.box.y + line.box.height / 2;
+  const sameRow = Math.abs(middle(a) - middle(b)) < Math.min(a.box.height, b.box.height) / 2;
+  return sameRow ? a.box.x - b.box.x : a.box.y - b.box.y;
 }
 
 const FAX_LABEL = /\bf(?:ax)?\b/i;

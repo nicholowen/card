@@ -31,9 +31,7 @@ export class InMemoryDatabase implements LocalDatabase {
 /** Returns whatever lines of text the test says the camera saw, one above the other. */
 export class FakeOcr implements OcrAdapter {
   lines: string[] = [];
-  readonly recognised: string[] = [];
-  async recognise(image: CardImage): Promise<RecognisedText> {
-    this.recognised.push(image.uri);
+  async recognise(): Promise<RecognisedText> {
     return {
       lines: this.lines.map((text, i) => ({ text, box: { x: 0.1, y: 0.1 + i * 0.1, width: 0.5, height: 0.05 } })),
     };
@@ -50,13 +48,17 @@ export class FakeOnDeviceParser implements OnDeviceParser {
   }
 }
 
-/** Keeps photos in memory, at a durable address that says which card they belong to. */
+/**
+ * Keeps photos in memory under a documents folder whose address can change, as
+ * an iOS app's container does after an update or a restore.
+ */
 export class FakeImageStore implements CardImageStore {
-  readonly kept = new Map<string, string>();
-  async keep(image: CardImage, name: string): Promise<CardImage> {
-    const uri = `file:///documents/card-images/${name}.jpg`;
-    this.kept.set(uri, image.uri);
-    return { uri };
+  documents = "file:///documents";
+  async keep(_image: CardImage, name: string): Promise<string> {
+    return `card-images/${name}.jpg`;
+  }
+  locate(reference: string): CardImage {
+    return { uri: `${this.documents}/${reference}` };
   }
 }
 

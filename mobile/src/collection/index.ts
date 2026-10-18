@@ -7,9 +7,11 @@ import type {
   OnDeviceParser,
   ParsedFields,
 } from "./ports";
+import { SOCIAL_FIELD_PREFIX } from "./ports";
 import { migrateLocalDatabase } from "./schema";
 
 export type * from "./ports";
+export { socialFieldKey } from "./ports";
 
 export interface CollectionDependencies {
   db: LocalDatabase;
@@ -153,7 +155,7 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
 
   async function get(id: string): Promise<CardCopy | null> {
     const row = await getRow(id);
-    return row ? toCardCopy(row) : null;
+    return row ? toCardCopy(row, deps.images) : null;
   }
 
   return {
@@ -201,21 +203,29 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
     async saveScan(review, corrected) {
       const fields = cleanFields(corrected);
       const id = deps.newId();
-      const frontImage = await deps.images.keep(review.front, `${id}-front`);
+      const frontImageReference = await deps.images.keep(review.front, `${id}-front`);
       const now = deps.now().toISOString();
       const card: CardCopy = {
         id,
         source: "scan",
         parsedBy: "device",
         fields,
-        frontImage,
+        frontImage: deps.images.locate(frontImageReference),
         createdAt: now,
         updatedAt: now,
       };
       await deps.db.execute(
         `INSERT INTO card_copy (id, source, parsed_by, payload, front_image, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, card.source, "device", writePayload({ fields, fieldConfidences: review.fieldConfidences }), frontImage.uri, now, now],
+        [
+          id,
+          card.source,
+          card.parsedBy!,
+          writePayload({ fields, fieldConfidences: review.fieldConfidences }),
+          frontImageReference,
+          now,
+          now,
+        ],
       );
       return card;
     },
@@ -234,7 +244,7 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
         updatedAt,
         id,
       ]);
-      return { ...toCardCopy(row), fields, updatedAt };
+      return { ...toCardCopy(row, deps.images), fields, updatedAt };
     },
 
     async delete(id) {
@@ -264,15 +274,13 @@ function toCardFields(parsed: ParsedFields): CardFields {
     if (value) fields[key] = value;
   }
   const socials = Object.entries(parsed)
-    .filter(([key]) => key.startsWith(SOCIAL_KEY_PREFIX))
-    .map(([key, field]) => ({ network: key.slice(SOCIAL_KEY_PREFIX.length), handle: field.value.trim() }))
+    .filter(([key]) => key.startsWith(SOCIAL_FIELD_PREFIX))
+    .map(([key, field]) => ({ network: key.slice(SOCIAL_FIELD_PREFIX.length), handle: field.value.trim() }))
     .filter((social) => social.handle !== "");
   if (socials.length > 0) fields.socials = socials;
   return fields;
 }
 
-/** How a Parse keys social handles: `social:LinkedIn`. */
-const SOCIAL_KEY_PREFIX = "social:";
 
 /** Thrown when a card would be saved with no details at all. */
 export class CardHasNoDetails extends Error {
@@ -306,13 +314,13 @@ export class CardCopyNotFound extends Error {
   }
 }
 
-function toCardCopy(row: CardCopyRow): CardCopy {
+function toCardCopy(row: CardCopyRow, images: CardImageStore): CardCopy {
   return {
     id: row.id,
     source: row.source,
     ...(row.parsed_by ? { parsedBy: row.parsed_by } : {}),
     fields: readPayload(row).fields,
-    ...(row.front_image ? { frontImage: { uri: row.front_image } } : {}),
+    ...(row.front_image ? { frontImage: images.locate(row.front_image) } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -142,6 +142,23 @@ describe("the on-device heuristic parser", () => {
     expect(parsed.company!.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("reads lines top to bottom whatever order OCR returns them in", async () => {
+    const { lines } = card(["Aroha Ngata", 0.08], "12 Cuba Street", "Wellington 6011", "New Zealand");
+
+    const parsed = await heuristicParser.parse({ lines: [lines[2]!, lines[3]!, lines[1]!, lines[0]!] });
+
+    expect(values(parsed)).toEqual({
+      name: "Aroha Ngata",
+      address: "12 Cuba Street, Wellington 6011, New Zealand",
+    });
+  });
+
+  it("finds both an email and a phone number printed on one line", async () => {
+    const parsed = await heuristicParser.parse(card("aroha@kowhai.example | 021 555 0199"));
+
+    expect(values(parsed)).toEqual({ email: "aroha@kowhai.example", phone: "021 555 0199" });
+  });
+
   it("finds nothing on a card it couldn't read", async () => {
     expect(await heuristicParser.parse({ lines: [] })).toEqual({});
   });

@@ -14,7 +14,7 @@ const MIGRATIONS: string[] = [
     deleted_at TEXT,
     synced_at TEXT
   )`,
-  // The photo of a scanned card's front, as a file address on this device.
+  // The photo of a scanned card's front: a CardImageStore reference, not a file address.
   `ALTER TABLE card_copy ADD COLUMN front_image TEXT`,
 ];
 

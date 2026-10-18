@@ -56,7 +56,10 @@ public class CardScannerModule: Module {
         return
       }
 
+      // Vision can both call back with an error and throw from perform; settle the promise once.
+      let settle = Once()
       let request = VNRecognizeTextRequest { request, error in
+        guard settle.first() else { return }
         if let error {
           promise.reject(error)
           return
@@ -87,10 +90,24 @@ public class CardScannerModule: Module {
           // Reading from the file applies its EXIF orientation.
           try VNImageRequestHandler(url: url, options: [:]).perform([request])
         } catch {
-          promise.reject(error)
+          if settle.first() { promise.reject(error) }
         }
       }
     }
+  }
+}
+
+/// True the first time `first()` is called, false after; safe across threads.
+private final class Once: @unchecked Sendable {
+  private let lock = NSLock()
+  private var done = false
+
+  func first() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    if done { return false }
+    done = true
+    return true
   }
 }
 

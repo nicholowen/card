@@ -2,7 +2,9 @@ package expo.modules.cardscanner
 
 import android.app.Activity
 import android.content.Context
+import android.content.IntentSender
 import android.net.Uri
+import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -52,12 +54,19 @@ class CardScannerModule : Module() {
       GmsDocumentScanning.getClient(options)
         .getStartScanIntent(activity)
         .addOnSuccessListener { intentSender ->
-          activity.startIntentSenderForResult(intentSender, SCAN_REQUEST_CODE, null, 0, 0, 0)
+          try {
+            activity.startIntentSenderForResult(intentSender, SCAN_REQUEST_CODE, null, 0, 0, 0)
+          } catch (error: IntentSender.SendIntentException) {
+            pendingScan = null
+            promise.reject(ScannerNotReadyException(error))
+          }
         }
         .addOnFailureListener { error ->
           pendingScan = null
-          // Devices without Google Play services, or with too little memory, can't run the scanner.
-          promise.reject(ScannerUnavailableException(error))
+          // Devices with too little memory can't run the scanner at all. Otherwise it's
+          // usually still downloading into Google Play services, which needs a connection.
+          val unsupported = (error as? MlKitException)?.errorCode == MlKitException.UNSUPPORTED
+          promise.reject(if (unsupported) ScannerUnavailableException(error) else ScannerNotReadyException(error))
         }
     }
 
@@ -129,6 +138,9 @@ class CardScannerModule : Module() {
 
 internal class ScannerUnavailableException(cause: Throwable) :
   CodedException("This device can't scan cards with the camera", cause)
+
+internal class ScannerNotReadyException(cause: Throwable) :
+  CodedException("The scanner couldn't start. It may still be installing, which needs an internet connection", cause)
 
 internal class ScanInProgressException :
   CodedException("A card is already being scanned")

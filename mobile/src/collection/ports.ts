@@ -19,7 +19,7 @@ export interface OcrAdapter {
   recognise(image: CardImage): Promise<RecognisedText>;
 }
 
-/** What OCR read on a card: its lines, in reading order. */
+/** What OCR read on a card: its lines, in no particular order. */
 export interface RecognisedText {
   lines: RecognisedLine[];
 }
@@ -40,11 +40,24 @@ export interface OnDeviceParser {
  * Keeps card photos on the device for as long as their Card Copy exists. The
  * camera writes to a cache the system may clear, so a photo is copied here
  * before its card is saved.
+ *
+ * The Collection stores the reference `keep` returns rather than a file
+ * address, because the app's own folder can move (on iOS, after an update or a
+ * restore) and a stored address would then point nowhere.
  */
 export interface CardImageStore {
-  /** Copies the photo to durable storage under `name` and returns where it now lives. */
-  keep(image: CardImage, name: string): Promise<CardImage>;
+  /** Copies the photo to durable storage under `name`, and returns a reference to it. */
+  keep(image: CardImage, name: string): Promise<string>;
+  /** Where a kept photo is now. */
+  locate(reference: string): CardImage;
 }
+
+/** How a Parse keys a social handle, such as `social:LinkedIn` (see ParsedFields). */
+export function socialFieldKey(network: string): string {
+  return `${SOCIAL_FIELD_PREFIX}${network}`;
+}
+
+export const SOCIAL_FIELD_PREFIX = "social:";
 
 /** The parts of the API the Collection calls. Grows as sync and cloud Parse arrive. */
 export interface ApiClient {

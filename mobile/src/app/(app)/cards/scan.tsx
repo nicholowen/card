@@ -2,7 +2,7 @@ import { router, Stack } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import type { Collection, ScanReview } from "../../../collection";
-import { captureCardFront, ScannerUnavailable } from "../../../collection/adapters/card-scanner";
+import { captureCardFront, ScannerNotReady, ScannerUnavailable } from "../../../collection/adapters/card-scanner";
 import { Button } from "../../../components/Button";
 import { CardForm } from "../../../components/CardForm";
 import { CardPhoto } from "../../../components/CardPhoto";
@@ -13,6 +13,7 @@ type ScanState =
   | { step: "reading" }
   | { step: "reviewing"; review: ScanReview }
   | { step: "unavailable" }
+  | { step: "notReady" }
   | { step: "failed" };
 
 /**
@@ -36,7 +37,10 @@ export default function ScanCardScreen() {
       setState({ step: "reading" });
       setState({ step: "reviewing", review: await collection.scan(front) });
     } catch (error) {
-      setState({ step: error instanceof ScannerUnavailable ? "unavailable" : "failed" });
+      setState({
+        step:
+          error instanceof ScannerUnavailable ? "unavailable" : error instanceof ScannerNotReady ? "notReady" : "failed",
+      });
     }
   }
 
@@ -76,6 +80,17 @@ export default function ScanCardScreen() {
           body="You can still add the card by typing in its details."
           action={<Button title="Add by hand" onPress={() => router.replace("/cards/new")} busy={false} />}
         />
+      ) : state.step === "notReady" ? (
+        <Message
+          title="The scanner isn't ready yet"
+          body="The first time you scan, your phone may need an internet connection to finish setting up the scanner. Try again once you're connected, or add the card by hand."
+          action={
+            <View style={styles.actions}>
+              {collection ? <Button title="Try again" onPress={() => scan(collection)} busy={false} /> : null}
+              <Button title="Add by hand" variant="outline" onPress={() => router.replace("/cards/new")} busy={false} />
+            </View>
+          }
+        />
       ) : state.step === "failed" ? (
         <Message
           title="Couldn't scan that card"
@@ -110,4 +125,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "600", textAlign: "center" },
   body: { fontSize: 15, color: "#666", textAlign: "center" },
   action: { alignSelf: "stretch", marginTop: 8 },
+  actions: { gap: 10 },
 });
