@@ -155,7 +155,7 @@ private func writeToCache(_ image: UIImage) throws -> URL {
 
 internal final class ScannerUnavailableException: Exception, @unchecked Sendable {
   override var reason: String {
-    "This device can't scan cards with the camera"
+    "This device can't scan cards with the camera: VNDocumentCameraViewController isn't supported here (the iOS simulator never supports it)"
   }
 }
 

@@ -12,9 +12,9 @@ type ScanState =
   | { step: "capturing" }
   | { step: "reading" }
   | { step: "reviewing"; review: ScanReview }
-  | { step: "unavailable" }
-  | { step: "notReady" }
-  | { step: "failed" };
+  | { step: "unavailable"; detail: string }
+  | { step: "notReady"; detail: string }
+  | { step: "failed"; detail: string };
 
 /**
  * Scan the front of a card: the camera captures it on its own, the text is
@@ -37,10 +37,12 @@ export default function ScanCardScreen() {
       setState({ step: "reading" });
       setState({ step: "reviewing", review: await collection.scan(front) });
     } catch (error) {
-      setState({
-        step:
-          error instanceof ScannerUnavailable ? "unavailable" : error instanceof ScannerNotReady ? "notReady" : "failed",
-      });
+      if (error instanceof ScannerUnavailable) setState({ step: "unavailable", detail: error.detail });
+      else if (error instanceof ScannerNotReady) setState({ step: "notReady", detail: error.detail });
+      else {
+        console.error("[scan] Scanning the card failed", error);
+        setState({ step: "failed", detail: error instanceof Error ? error.message : String(error) });
+      }
     }
   }
 
@@ -78,12 +80,14 @@ export default function ScanCardScreen() {
         <Message
           title="Scanning isn't available on this device"
           body="You can still add the card by typing in its details."
+          detail={state.detail}
           action={<Button title="Add by hand" onPress={() => router.replace("/cards/new")} busy={false} />}
         />
       ) : state.step === "notReady" ? (
         <Message
           title="The scanner isn't ready yet"
           body="The first time you scan, your phone may need an internet connection to finish setting up the scanner. Try again once you're connected, or add the card by hand."
+          detail={state.detail}
           action={
             <View style={styles.actions}>
               {collection ? <Button title="Try again" onPress={() => scan(collection)} busy={false} /> : null}
@@ -95,6 +99,7 @@ export default function ScanCardScreen() {
         <Message
           title="Couldn't scan that card"
           body="Something went wrong reading the card. Try again with the card flat and well lit."
+          detail={state.detail}
           action={collection ? <Button title="Scan again" onPress={() => scan(collection)} busy={false} /> : null}
         />
       ) : (
@@ -107,11 +112,17 @@ export default function ScanCardScreen() {
   );
 }
 
-function Message({ title, body, action }: { title: string; body: string; action: ReactNode }) {
+/** A full-screen message. In development it also shows the underlying error, to save a trip to the logs. */
+function Message({ title, body, detail, action }: { title: string; body: string; detail: string; action: ReactNode }) {
   return (
     <View style={[styles.centre, styles.message]}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
+      {__DEV__ ? (
+        <Text style={styles.detail} selectable>
+          {detail}
+        </Text>
+      ) : null}
       <View style={styles.action}>{action}</View>
     </View>
   );
@@ -124,6 +135,7 @@ const styles = StyleSheet.create({
   note: { fontSize: 14, color: "#666" },
   title: { fontSize: 18, fontWeight: "600", textAlign: "center" },
   body: { fontSize: 15, color: "#666", textAlign: "center" },
+  detail: { fontSize: 12, color: "#999", textAlign: "center", fontFamily: "monospace" },
   action: { alignSelf: "stretch", marginTop: 8 },
   actions: { gap: 10 },
 });
