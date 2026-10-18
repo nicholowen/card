@@ -26,7 +26,8 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-sqlite",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-status-bar"
     ],
     "scheme": "card"
   }
