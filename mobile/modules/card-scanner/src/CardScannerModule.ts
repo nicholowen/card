@@ -1,4 +1,4 @@
-import { NativeModule, requireNativeModule } from "expo";
+import { NativeModule, requireOptionalNativeModule } from "expo";
 import type { RecognisedLine } from "./CardScannerModule.types";
 
 declare class CardScannerModule extends NativeModule<{}> {
@@ -15,4 +15,8 @@ declare class CardScannerModule extends NativeModule<{}> {
   recogniseTextAsync(uri: string): Promise<RecognisedLine[]>;
 }
 
-export default requireNativeModule<CardScannerModule>("CardScannerModule");
+/**
+ * The native module, or null when the app is running without it, such as in
+ * Expo Go, which only includes Expo's own native modules.
+ */
+export default requireOptionalNativeModule<CardScannerModule>("CardScannerModule");

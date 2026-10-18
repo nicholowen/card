@@ -69,7 +69,7 @@ Better Auth's tables are renamed to match the glossary: `account` is our Account
 
 ## Running the app
 
-The app runs as a **development build**, not in Expo Go: card scanning uses the app's own native module, `mobile/modules/card-scanner`, which Expo Go doesn't include.
+The app runs as a **development build**, not in Expo Go: card scanning uses the app's own native module, `mobile/modules/card-scanner`, which Expo Go doesn't include. Start Metro with `npm start -w mobile` (or `npx expo start`), not `--go`: in Expo Go the Scan screen says scanning isn't available, and the console logs why.
 
 The API only accepts sign-in requests from origins it trusts. The app's own `card://` scheme is always trusted. Expo Go sends `exp://…` instead, which is trusted unless `NODE_ENV=production`. If sign-in fails with "Invalid origin", the API console logs the origin it rejected.
 
@@ -92,6 +92,8 @@ The app opens on the Collection, which works signed out and offline: cards can b
 ### Scanning cards
 
 Tap **Scan** to open the system document camera, which finds the card's edges and captures it on its own: VisionKit on iOS, ML Kit's document scanner on Android. The card's text is recognised on the phone (Apple Vision / ML Kit Text Recognition) and parsed by on-device heuristics (`mobile/src/collection/adapters/heuristic-parser.ts`), then shown for review with doubtful fields marked "Check this". The photo is copied into the app's documents folder, under `card-images/<collection>/`, when the card is saved.
+
+When scanning fails, the console shows the native error code and reason (lines starting `[card-scanner]`), and in development the Scan screen shows it under the message.
 
 Scanning needs a real camera: the iOS simulator says scanning isn't available and offers to add the card by hand. On Android the scanner runs inside Google Play services, so the device needs them. Native code for the scanner lives in `mobile/modules/card-scanner` (`ios/` and `android/`); rebuild with `ios`/`android` after changing it.
 

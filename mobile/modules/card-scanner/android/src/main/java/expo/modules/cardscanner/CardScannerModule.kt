@@ -136,20 +136,29 @@ class CardScannerModule : Module() {
   }
 }
 
+/** The cause's own reason, and ML Kit's error code when it has one, so the app's logs say what went wrong. */
+private fun describe(cause: Throwable): String {
+  val mlKitCode = (cause as? MlKitException)?.errorCode?.let { " (ML Kit error code $it)" } ?: ""
+  return "${cause.javaClass.simpleName}: ${cause.message}$mlKitCode"
+}
+
 internal class ScannerUnavailableException(cause: Throwable) :
-  CodedException("This device can't scan cards with the camera", cause)
+  CodedException("This device can't scan cards with the camera. ${describe(cause)}", cause)
 
 internal class ScannerNotReadyException(cause: Throwable) :
-  CodedException("The scanner couldn't start. It may still be installing, which needs an internet connection", cause)
+  CodedException(
+    "The scanner couldn't start. It may still be installing, which needs an internet connection. ${describe(cause)}",
+    cause
+  )
 
 internal class ScanInProgressException :
   CodedException("A card is already being scanned")
 
 internal class ImageCopyException(cause: Throwable) :
-  CodedException("The scanned card couldn't be saved as an image", cause)
+  CodedException("The scanned card couldn't be saved as an image. ${describe(cause)}", cause)
 
 internal class InvalidImageException(uri: String, cause: Throwable) :
-  CodedException("'$uri' isn't the address of an image file on this device", cause)
+  CodedException("'$uri' isn't the address of an image file on this device. ${describe(cause)}", cause)
 
 internal class TextRecognitionException(cause: Throwable) :
-  CodedException("The card's text couldn't be read", cause)
+  CodedException("The card's text couldn't be read. ${describe(cause)}", cause)
