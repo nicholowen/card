@@ -1,0 +1,131 @@
+import { useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+} from "react-native";
+import { EmptyCard, type CardFields, type SocialHandle } from "../collection";
+import { Button } from "./Button";
+
+type TextField = Exclude<keyof CardFields, "socials">;
+
+const TEXT_FIELDS: { key: TextField; label: string; input: TextInputProps }[] = [
+  { key: "name", label: "Name", input: { autoCapitalize: "words", textContentType: "name" } },
+  { key: "jobTitle", label: "Job title", input: { autoCapitalize: "words", textContentType: "jobTitle" } },
+  { key: "company", label: "Company", input: { autoCapitalize: "words", textContentType: "organizationName" } },
+  {
+    key: "email",
+    label: "Email",
+    input: { autoCapitalize: "none", keyboardType: "email-address", textContentType: "emailAddress" },
+  },
+  { key: "phone", label: "Phone", input: { keyboardType: "phone-pad", textContentType: "telephoneNumber" } },
+  { key: "website", label: "Website", input: { autoCapitalize: "none", keyboardType: "url", textContentType: "URL" } },
+  { key: "address", label: "Address", input: { multiline: true, textContentType: "fullStreetAddress" } },
+];
+
+/** The fields of a card as the Holder types them. Blank values are fine; the Collection drops them. */
+export function CardForm({
+  initial = {},
+  submitTitle,
+  onSubmit,
+}: {
+  initial?: CardFields;
+  submitTitle: string;
+  onSubmit: (fields: CardFields) => Promise<void>;
+}) {
+  const [fields, setFields] = useState<CardFields>(initial);
+  const [socials, setSocials] = useState<SocialHandle[]>(initial.socials ?? []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function setSocial(index: number, change: Partial<SocialHandle>) {
+    setSocials((current) => current.map((social, i) => (i === index ? { ...social, ...change } : social)));
+  }
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSubmit({ ...fields, socials });
+    } catch (e) {
+      setError(e instanceof EmptyCard ? "Add at least one detail, such as a name." : "Couldn't save this card.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        {TEXT_FIELDS.map(({ key, label, input }) => (
+          <View key={key} style={styles.field}>
+            <Text style={styles.label}>{label}</Text>
+            <TextInput
+              style={[styles.input, input.multiline && styles.multiline]}
+              value={fields[key] ?? ""}
+              onChangeText={(value) => setFields((current) => ({ ...current, [key]: value }))}
+              autoCorrect={false}
+              editable={!busy}
+              {...input}
+            />
+          </View>
+        ))}
+
+        <Text style={styles.label}>Social</Text>
+        {socials.map((social, index) => (
+          <View key={index} style={styles.socialRow}>
+            <TextInput
+              style={[styles.input, styles.network]}
+              value={social.network}
+              onChangeText={(network) => setSocial(index, { network })}
+              placeholder="LinkedIn"
+              autoCorrect={false}
+              editable={!busy}
+            />
+            <TextInput
+              style={[styles.input, styles.flex]}
+              value={social.handle}
+              onChangeText={(handle) => setSocial(index, { handle })}
+              placeholder="Handle or link"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+            />
+            <Pressable
+              onPress={() => setSocials((current) => current.filter((_, i) => i !== index))}
+              hitSlop={8}
+              accessibilityLabel="Remove social handle"
+            >
+              <Text style={styles.remove}>✕</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Pressable onPress={() => setSocials((current) => [...current, { network: "", handle: "" }])} disabled={busy}>
+          <Text style={styles.link}>Add a social handle</Text>
+        </Pressable>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Button title={submitTitle} onPress={submit} busy={busy} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  form: { padding: 20, gap: 14, backgroundColor: "#fff" },
+  field: { gap: 6 },
+  label: { fontSize: 14, fontWeight: "600", color: "#333" },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, fontSize: 17 },
+  multiline: { minHeight: 72, textAlignVertical: "top" },
+  socialRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  network: { width: 110 },
+  remove: { fontSize: 18, color: "#666", paddingHorizontal: 4 },
+  link: { color: "#0a66c2", fontSize: 15, paddingVertical: 4 },
+  error: { color: "#b3261e", fontSize: 15 },
+});

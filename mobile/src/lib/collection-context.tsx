@@ -1,3 +1,4 @@
+import { randomUUID } from "expo-crypto";
 import { openDatabaseAsync } from "expo-sqlite";
 import { createContext, use, useEffect, useState, type ReactNode } from "react";
 import { openCollection, type Collection } from "../collection";
@@ -10,19 +11,29 @@ import {
 
 const CollectionContext = createContext<Collection | null>(null);
 
-async function openDeviceCollection(accountId: string): Promise<Collection> {
-  // One local database per Account, so a second person signing in on the
-  // same phone never sees the first person's Collection.
-  const db = await openDatabaseAsync(`collection-${accountId}.db`);
+/**
+ * One local database per Account (ADR 0007), so a second person signing in on
+ * the same phone never sees the first person's Collection. Someone who hasn't
+ * signed in gets their own anonymous database.
+ */
+function databaseName(accountId: string | null): string {
+  return accountId ? `collection-${accountId}.db` : "collection-anonymous.db";
+}
+
+async function openDeviceCollection(accountId: string | null): Promise<Collection> {
+  const db = await openDatabaseAsync(databaseName(accountId));
   return openCollection({
     db: expoSqliteDatabase(db),
     ocr: ocrNotYetAvailable,
     parser: onDeviceParserNotYetAvailable,
     api: apiClientNotYetAvailable,
+    newId: randomUUID,
+    now: () => new Date(),
   });
 }
 
-export function CollectionProvider({ accountId, children }: { accountId: string; children: ReactNode }) {
+/** Opens the Collection for the signed-in Account, or the anonymous one when `accountId` is null. */
+export function CollectionProvider({ accountId, children }: { accountId: string | null; children: ReactNode }) {
   const [collection, setCollection] = useState<Collection | null>(null);
 
   useEffect(() => {
@@ -39,7 +50,7 @@ export function CollectionProvider({ accountId, children }: { accountId: string;
   return <CollectionContext value={collection}>{children}</CollectionContext>;
 }
 
-/** The signed-in Account's Collection, or null while it is still opening. */
+/** The current Collection, or null while it is still opening. */
 export function useCollection(): Collection | null {
   return use(CollectionContext);
 }

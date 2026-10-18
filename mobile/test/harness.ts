@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { openCollection, type CollectionDependencies } from "../src/collection";
 import type { ApiClient, LocalDatabase, OcrAdapter, OnDeviceParser, ParsedFields, SqlValue } from "../src/collection/ports";
@@ -47,14 +48,26 @@ export class FakeApiClient implements ApiClient {
   }
 }
 
+/** A clock that only moves when the test says so. */
+export class TestClock {
+  private time = new Date("2026-10-19T09:00:00.000Z").getTime();
+  now = () => new Date(this.time);
+  advance(minutes: number) {
+    this.time += minutes * 60_000;
+  }
+}
+
 export async function createTestCollection() {
   const db = new InMemoryDatabase();
+  const clock = new TestClock();
   const deps = {
     db,
     ocr: new FakeOcr(),
     parser: new FakeOnDeviceParser(),
     api: new FakeApiClient(),
+    newId: () => randomUUID(),
+    now: clock.now,
   } satisfies CollectionDependencies;
   const collection = await openCollection(deps);
-  return { collection, db, deps };
+  return { collection, clock, db, deps };
 }

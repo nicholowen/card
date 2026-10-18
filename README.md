@@ -87,7 +87,9 @@ After the first native build, `npm start -w mobile` starts Metro for JavaScript-
 - Android emulator: `http://10.0.2.2:3000`
 - Physical device: your computer's LAN address, e.g. `http://192.168.1.20:3000`, and set `BETTER_AUTH_URL` in `api/.env` to the same address
 
-Sign in with any email address, copy the code from the API console, and you land on an empty Collection.
+The app opens on the Collection, which works signed out and offline: cards can be added by hand, opened, edited and deleted with no Account. Each Account's Collection lives in its own local database, `collection-<accountId>.db`, and a signed-out Holder uses `collection-anonymous.db` (ADR 0007). Cards added while signed out aren't moved into an Account yet when you sign in.
+
+To sign in, tap **Sign in**, enter any email address and copy the code from the API console.
 
 ## Tests
 

@@ -1,5 +1,5 @@
 import * as AppleAuthentication from "expo-apple-authentication";
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -43,6 +43,12 @@ export default function SignInScreen() {
     setSocialBusy(null);
     // Once signed in, the session update redirects away from this screen.
     if (result.kind === "failed") setError(result.message);
+  }
+
+  /** The Collection works without an Account, so signing in can wait. */
+  function notNow() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
   }
 
   async function sendCode() {
@@ -114,6 +120,10 @@ export default function SignInScreen() {
               busy={socialBusy === "google"}
               disabled={anyBusy}
             />
+
+            <Pressable onPress={notNow} disabled={anyBusy}>
+              <Text style={styles.link}>Not now</Text>
+            </Pressable>
           </>
         ) : (
           <>
