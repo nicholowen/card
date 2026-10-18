@@ -6,8 +6,10 @@ import type {
   OcrAdapter,
   OnDeviceParser,
   ParsedFields,
+  RecognisedText,
 } from "./ports";
 import { SOCIAL_FIELD_PREFIX } from "./ports";
+import { textInReadingOrder } from "./reading-order";
 import { migrateLocalDatabase } from "./schema";
 
 export type * from "./ports";
@@ -74,6 +76,8 @@ export type ParsedBy = "device" | "cloud-text" | "cloud-vision";
 export interface ScanReview {
   /** The photo of the card's front, still in the camera's cache. */
   front: CardImage;
+  /** Where the card was parsed. A card parsed on the device only may be less accurate (spec story 14). */
+  parsedBy: ParsedBy;
   /** The fields the Parse found, for the Holder to correct. */
   fields: CardFields;
   /** Fields whose Field Confidence is low, in display order, for the Holder to double-check. */
@@ -158,6 +162,23 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
     return row ? toCardCopy(row, deps.images) : null;
   }
 
+  /**
+   * Parses what OCR read (ADR 0004): in the cloud when the API answers, which
+   * needs a signed-in Holder with signal, otherwise on the device.
+   */
+  async function parse(recognised: RecognisedText): Promise<{ parsed: ParsedFields; parsedBy: ParsedBy }> {
+    const text = textInReadingOrder(recognised);
+    // With no text there's nothing for the text Parse to read.
+    if (text) {
+      try {
+        return { parsed: await deps.api.parseCardText(text), parsedBy: "cloud-text" };
+      } catch {
+        // Signed out, offline, or the API couldn't parse it: the device Parse still works.
+      }
+    }
+    return { parsed: await deps.parser.parse(recognised), parsedBy: "device" };
+  }
+
   return {
     async list() {
       const rows = await deps.db.all<CardCopyRow>(
@@ -188,10 +209,11 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
 
     async scan(front) {
       const recognised = await deps.ocr.recognise(front);
-      const parsed = await deps.parser.parse(recognised);
+      const { parsed, parsedBy } = await parse(recognised);
       const fields = toCardFields(parsed);
       return {
         front,
+        parsedBy,
         fields,
         needsChecking: CARD_TEXT_FIELDS.filter(
           (key) => fields[key] !== undefined && parsed[key]!.confidence < CHECK_BELOW_CONFIDENCE,
@@ -208,7 +230,7 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
       const card: CardCopy = {
         id,
         source: "scan",
-        parsedBy: "device",
+        parsedBy: review.parsedBy,
         fields,
         frontImage: deps.images.locate(frontImageReference),
         createdAt: now,

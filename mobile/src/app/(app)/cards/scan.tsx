@@ -18,8 +18,10 @@ type ScanState =
 
 /**
  * Scan the front of a card: the camera captures it on its own, the text is
- * read and parsed on this phone, and the Holder checks the fields before
- * saving (spec stories 1–5, 9, 13, 14). Works signed out and offline.
+ * read on this phone and parsed in the cloud when signed in with signal (on
+ * the phone otherwise), and the Holder checks the fields before saving, with
+ * low-confidence ones marked (spec stories 1–5, 9, 13, 14). Works signed out
+ * and offline.
  */
 export default function ScanCardScreen() {
   const collection = useCollection();
@@ -63,11 +65,7 @@ export default function ScanCardScreen() {
           header={
             <View style={styles.header}>
               <CardPhoto image={state.review.front} />
-              <Text style={styles.note}>
-                {Object.keys(state.review.fields).length === 0
-                  ? "No text could be read from this card. Type in the details, or scan it again."
-                  : "Read on this phone, so some details may be wrong. Fix anything that doesn't match the card."}
-              </Text>
+              <Text style={styles.note}>{reviewNote(state.review)}</Text>
             </View>
           }
           submitTitle="Save card"
@@ -110,6 +108,20 @@ export default function ScanCardScreen() {
       )}
     </>
   );
+}
+
+/** What the review screen tells the Holder about how the card was read. */
+function reviewNote(review: ScanReview): string {
+  if (Object.keys(review.fields).length === 0) {
+    return "No text could be read from this card. Type in the details, or scan it again.";
+  }
+  const check = review.needsChecking.length > 0 ? " Check the marked fields against the card." : "";
+  if (review.parsedBy === "device") {
+    return `Parsed on this phone only, so some details may be less accurate.${check} Fix anything that doesn't match the card.`;
+  }
+  return review.needsChecking.length > 0
+    ? "Check the marked fields against the card, and fix anything that doesn't match."
+    : "Fix anything that doesn't match the card.";
 }
 
 /** A full-screen message. In development it also shows the underlying error, to save a trip to the logs. */

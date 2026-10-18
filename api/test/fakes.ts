@@ -27,15 +27,19 @@ export class FakeEmailSender implements EmailSender {
 export class FakeLlmProvider implements LlmProvider {
   textResponse: ParsedFields = {};
   imageResponse: ParsedFields = {};
+  /** Set to make every call fail, as an outage or a rejected request at the provider would. */
+  failure: Error | null = null;
   readonly calls: ({ kind: "text"; text: string } | { kind: "image"; mimeType: string })[] = [];
 
   async parseCardText({ text }: { text: string }) {
     this.calls.push({ kind: "text", text });
+    if (this.failure) throw this.failure;
     return this.textResponse;
   }
 
   async parseCardImage({ mimeType }: { image: Uint8Array; mimeType: string }) {
     this.calls.push({ kind: "image", mimeType });
+    if (this.failure) throw this.failure;
     return this.imageResponse;
   }
 }

@@ -62,14 +62,24 @@ export class FakeImageStore implements CardImageStore {
   }
 }
 
-/** Stands in for the HTTP API; set `online = false` to simulate no signal. */
+/**
+ * Stands in for the HTTP API. It answers only once the Holder has signed in
+ * (`signedIn = true`), as the real API refuses a Parse without a session, and
+ * only while there is signal (set `online = false` for none).
+ */
 export class FakeApiClient implements ApiClient {
+  signedIn = false;
   online = true;
+  /** Set to make the API's Parse fail, as when the LLM provider is down. */
+  parseFails = false;
   fields: ParsedFields = {};
+  /** The text of each Parse the API received. */
   readonly parseCalls: string[] = [];
   async parseCardText(text: string) {
     if (!this.online) throw new Error("Network request failed");
+    if (!this.signedIn) throw new Error("401 not-signed-in");
     this.parseCalls.push(text);
+    if (this.parseFails) throw new Error("502 parse-failed");
     return this.fields;
   }
 }

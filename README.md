@@ -91,7 +91,16 @@ The app opens on the Collection, which works signed out and offline: cards can b
 
 ### Scanning cards
 
-Tap **Scan** to open the system document camera, which finds the card's edges and captures it on its own: VisionKit on iOS, ML Kit's document scanner on Android. The card's text is recognised on the phone (Apple Vision / ML Kit Text Recognition) and parsed by on-device heuristics (`mobile/src/collection/adapters/heuristic-parser.ts`), then shown for review with doubtful fields marked "Check this". The photo is copied into the app's documents folder, under `card-images/<collection>/`, when the card is saved.
+Tap **Scan** to open the system document camera, which finds the card's edges and captures it on its own: VisionKit on iOS, ML Kit's document scanner on Android. The card's text is recognised on the phone (Apple Vision / ML Kit Text Recognition), then parsed:
+
+- **Signed in, with signal**: the recognised text (never the photo) goes to the API's Parse, `POST /api/parse`, which asks a text LLM for the fields and a Field Confidence for each (ADR 0004). The card is saved with `parsed_by = cloud-text`.
+- **Signed out, offline, or if the cloud Parse fails or takes more than 8 seconds**: on-device heuristics parse it instead (`mobile/src/collection/adapters/heuristic-parser.ts`). The card is saved with `parsed_by = device`, and both the review screen and the card say it was parsed on this phone only.
+
+Either way the fields are shown for review with low-confidence ones marked "Check this". The photo is copied into the app's documents folder, under `card-images/<collection>/`, when the card is saved.
+
+No LLM provider is wired up yet: until one is (behind the `LlmProvider` port in `api/src/ports.ts`), the API answers every Parse with `502 parse-failed`, logs `[parse] LLM call failed`, and the app falls back to the device Parse. Pick the provider by checking its zero-data-retention and no-training terms first (spec, Further Notes).
+
+Every successful cloud Parse is recorded in `parse_call` against the Account, ready for a free-tier limit later. A signed-in Account can read its own counts at `GET /api/parse/usage`.
 
 When scanning fails, the console shows the native error code and reason (lines starting `[card-scanner]`), and in development the Scan screen shows it under the message.
 

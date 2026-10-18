@@ -65,7 +65,7 @@ export default function CardScreen() {
       {card.frontImage ? <CardPhoto image={card.frontImage} /> : null}
       <Text style={styles.name}>{cardDisplayName(fields)}</Text>
       {card.parsedBy === "device" ? (
-        <Text style={styles.provenance}>Scanned and read on this phone</Text>
+        <Text style={styles.provenance}>Parsed on this phone only, so some details may be less accurate</Text>
       ) : null}
 
       {DETAIL_FIELDS.filter((key) => fields[key]).map((key) => (
