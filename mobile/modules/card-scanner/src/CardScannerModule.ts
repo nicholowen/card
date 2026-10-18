@@ -15,8 +15,5 @@ declare class CardScannerModule extends NativeModule<{}> {
   recogniseTextAsync(uri: string): Promise<RecognisedLine[]>;
 }
 
-/**
- * The native module, or null when the app is running without it, such as in
- * Expo Go, which only includes Expo's own native modules.
- */
+/** Null where the native module isn't built in, such as Expo Go. */
 export default requireOptionalNativeModule<CardScannerModule>("CardScannerModule");
