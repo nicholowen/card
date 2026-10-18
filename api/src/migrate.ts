@@ -15,6 +15,7 @@ export async function migrate(pool: Pool): Promise<void> {
     baseURL: "http://localhost",
     trustedOrigins: [],
     development: false,
+    socialProviders: {},
   });
   const { runMigrations } = await getMigrations(options);
   await runMigrations();

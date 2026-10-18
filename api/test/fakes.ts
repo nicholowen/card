@@ -1,9 +1,13 @@
+import { randomBytes } from "node:crypto";
 import type {
   EmailSender,
+  IdentityTokenVerifier,
   LlmProvider,
   ObjectStorage,
   OneTimeCodePurpose,
   ParsedFields,
+  SocialProviderId,
+  VerifiedIdentity,
 } from "../src/ports.ts";
 
 export class FakeEmailSender implements EmailSender {
@@ -52,5 +56,31 @@ export class InMemoryObjectStorage implements ObjectStorage {
     for (const key of [...this.objects.keys()]) {
       if (key.startsWith(prefix)) this.objects.delete(key);
     }
+  }
+}
+
+/**
+ * Stands in for Google and Apple. Tests ask it to issue an ID token for a person,
+ * as the provider would after native sign-in on the phone, and the API checks
+ * tokens against it. Any token it didn't issue is rejected.
+ */
+export class FakeIdentityProviders implements IdentityTokenVerifier {
+  private readonly issued = new Map<
+    string,
+    { provider: SocialProviderId; identity: VerifiedIdentity; nonce?: string }
+  >();
+
+  issue(provider: SocialProviderId, identity: VerifiedIdentity, options: { nonce?: string } = {}): string {
+    const token = `fake-${provider}-id-token-${randomBytes(8).toString("hex")}`;
+    this.issued.set(token, { provider, identity, nonce: options.nonce });
+    return token;
+  }
+
+  async verify(provider: SocialProviderId, token: string, nonce?: string) {
+    const issued = this.issued.get(token);
+    if (!issued || issued.provider !== provider) return null;
+    // Like a real ID token: a nonce presented with the token must be the one it was issued for.
+    if (nonce !== undefined && nonce !== issued.nonce) return null;
+    return issued.identity;
   }
 }

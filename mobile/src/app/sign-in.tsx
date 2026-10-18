@@ -1,5 +1,6 @@
+import * as AppleAuthentication from "expo-apple-authentication";
 import { Redirect } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../components/Button";
 import { authClient } from "../lib/auth-client";
+import { hasNativeAppleSignIn, signInWith, type SocialProvider } from "../lib/social-sign-in";
 
 type Step = { kind: "email" } | { kind: "code"; email: string };
 
@@ -22,8 +24,26 @@ export default function SignInScreen() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
+  const [nativeApple, setNativeApple] = useState(false);
+
+  useEffect(() => {
+    hasNativeAppleSignIn().then(setNativeApple, () => setNativeApple(false));
+  }, []);
 
   if (session) return <Redirect href="/" />;
+
+  const anyBusy = busy || socialBusy !== null;
+
+  async function continueWith(provider: SocialProvider) {
+    if (anyBusy) return;
+    setSocialBusy(provider);
+    setError(null);
+    const result = await signInWith(provider);
+    setSocialBusy(null);
+    // Once signed in, the session update redirects away from this screen.
+    if (result.kind === "failed") setError(result.message);
+  }
 
   async function sendCode() {
     const address = email.trim().toLowerCase();
@@ -64,9 +84,36 @@ export default function SignInScreen() {
               textContentType="emailAddress"
               returnKeyType="send"
               onSubmitEditing={sendCode}
-              editable={!busy}
+              editable={!anyBusy}
             />
-            <Button title="Send code" onPress={sendCode} busy={busy} />
+            <Button title="Send code" onPress={sendCode} busy={busy} disabled={anyBusy} />
+
+            <Text style={styles.divider}>or</Text>
+
+            {nativeApple ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={10}
+                style={styles.appleButton}
+                onPress={() => continueWith("apple")}
+              />
+            ) : (
+              <Button
+                title="Continue with Apple"
+                variant="outline"
+                onPress={() => continueWith("apple")}
+                busy={socialBusy === "apple"}
+                disabled={anyBusy}
+              />
+            )}
+            <Button
+              title="Continue with Google"
+              variant="outline"
+              onPress={() => continueWith("google")}
+              busy={socialBusy === "google"}
+              disabled={anyBusy}
+            />
           </>
         ) : (
           <>
@@ -113,4 +160,7 @@ const styles = StyleSheet.create({
   code: { letterSpacing: 6, fontSize: 22 },
   link: { color: "#0a66c2", fontSize: 15, textAlign: "center", padding: 8 },
   error: { color: "#b3261e", fontSize: 15 },
+  divider: { color: "#777", fontSize: 15, textAlign: "center" },
+  // Apple's button has no intrinsic size: it must be given a height and width.
+  appleButton: { height: 50, width: "100%" },
 });

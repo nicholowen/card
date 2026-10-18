@@ -44,6 +44,21 @@ There is no real email sender yet. Sign-in codes are printed to the API's consol
 [email] sign-in code for you@example.com: 123456
 ```
 
+### Google and Apple sign-in
+
+Email codes work with no extra setup. Google and Apple are each offered only once their settings in `api/.env` are filled in (see the comments in `api/.env.example`); until then the app's buttons say they aren't available yet.
+
+How each one signs in:
+
+- **Apple on iPhone** uses the system sheet (`expo-apple-authentication`). The app sends Apple's ID token to the API, which checks it against `APPLE_APP_BUNDLE_IDENTIFIER`. This also works in Expo Go in development.
+- **Google (both platforms) and Apple on Android** open the provider in an in-app browser. The provider sends the browser back to the API at `<BETTER_AUTH_URL>/api/auth/callback/<google|apple>`, which hands the session to the app through its `card://` link. Register exactly that URL with the provider.
+
+Because the browser flow returns to `BETTER_AUTH_URL`, that address must be one the provider accepts: Google allows `http://localhost` but not LAN addresses, and Apple only allows `https`. To test these on a phone, expose the API through an HTTPS tunnel and use the tunnel's address for both `BETTER_AUTH_URL` and `EXPO_PUBLIC_API_URL`.
+
+Signing in with Google or Apple uses the same Account as email codes when the provider has verified that email address. If an Account with that email exists but the provider hasn't verified the address, the sign-in is refused rather than joined to it. Apple's "Hide My Email" addresses get their own Account.
+
+`APPLE_CLIENT_SECRET` is a JWT that expires after at most six months. Generate a new one before then, or Apple sign-in on Android stops working.
+
 Accounts have a `role` of `member` (the default) or `admin`. There's no admin UI; promote an Account in SQL:
 
 ```sql

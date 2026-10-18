@@ -20,6 +20,7 @@ if (process.argv.includes("--migrate-only")) {
     baseURL: config.baseURL,
     trustedOrigins: config.trustedOrigins,
     development: config.development,
+    socialProviders: config.socialProviders,
   });
   serve({ fetch: app.fetch, port: config.port, hostname: "0.0.0.0" }, (info) => {
     console.log(`API listening on http://localhost:${info.port}`);

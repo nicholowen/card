@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Pool } from "pg";
-import { createAuth } from "./auth.ts";
+import { createAuth, type SocialProvidersConfig } from "./auth.ts";
 import type { Ports } from "./ports.ts";
 
 export interface AppConfig {
@@ -10,6 +10,7 @@ export interface AppConfig {
   baseURL: string;
   trustedOrigins: string[];
   development: boolean;
+  socialProviders: SocialProvidersConfig;
 }
 
 export function createApp(config: AppConfig) {
@@ -20,6 +21,8 @@ export function createApp(config: AppConfig) {
     baseURL: config.baseURL,
     trustedOrigins: config.trustedOrigins,
     development: config.development,
+    socialProviders: config.socialProviders,
+    identityTokens: config.ports.identityTokens,
   });
 
   const app = new Hono();

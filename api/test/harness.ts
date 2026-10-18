@@ -4,7 +4,8 @@ import { createAdaptorServer } from "@hono/node-server";
 import pg from "pg";
 import { createApp } from "../src/app.ts";
 import { migrate } from "../src/migrate.ts";
-import { FakeEmailSender, FakeLlmProvider, InMemoryObjectStorage } from "./fakes.ts";
+import type { SocialProvidersConfig } from "../src/auth.ts";
+import { FakeEmailSender, FakeIdentityProviders, FakeLlmProvider, InMemoryObjectStorage } from "./fakes.ts";
 
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? "postgres://postgres@localhost:5432/card_test";
@@ -18,6 +19,8 @@ export interface TestApi {
   email: FakeEmailSender;
   llm: FakeLlmProvider;
   storage: InMemoryObjectStorage;
+  /** Stands in for Google and Apple: issues the ID tokens the app would get from native sign-in. */
+  identity: FakeIdentityProviders;
   /** A new HTTP client with its own cookie jar, like a separate device. */
   client(): TestClient;
   /**
@@ -32,6 +35,24 @@ export interface TestApi {
 export interface TestApiOptions {
   /** Run with development settings (trusts Expo Go). Defaults to production-like. */
   development?: boolean;
+  /** Which social providers the server is configured for. Both are on by default. */
+  socialProviders?: { google?: boolean; apple?: boolean };
+}
+
+/** Placeholder credentials: real ones are only needed to talk to Google and Apple, which tests never do. */
+function testSocialProviders(enabled: TestApiOptions["socialProviders"] = {}): SocialProvidersConfig {
+  return {
+    ...(enabled.google !== false && {
+      google: { clientId: "test-google-client-id", clientSecret: "test-google-client-secret" },
+    }),
+    ...(enabled.apple !== false && {
+      apple: {
+        serviceId: "test.apple.service-id",
+        clientSecret: "test-apple-client-secret",
+        appBundleIdentifier: "com.owennicholson.card",
+      },
+    }),
+  };
 }
 
 export async function startTestApi(options: TestApiOptions = {}): Promise<TestApi> {
@@ -60,6 +81,7 @@ export async function startTestApi(options: TestApiOptions = {}): Promise<TestAp
   const email = new FakeEmailSender();
   const llm = new FakeLlmProvider();
   const storage = new InMemoryObjectStorage();
+  const identity = new FakeIdentityProviders();
 
   // The auth base URL must be the real listening address, which is only known
   // once the server is bound, so the app is created after listen().
@@ -71,11 +93,12 @@ export async function startTestApi(options: TestApiOptions = {}): Promise<TestAp
 
   const app = createApp({
     pool,
-    ports: { email, llm, storage },
+    ports: { email, llm, storage, identityTokens: identity },
     authSecret: randomBytes(32).toString("base64"),
     baseURL: baseUrl,
     trustedOrigins: [baseUrl],
     development: options.development ?? false,
+    socialProviders: testSocialProviders(options.socialProviders),
   });
   handle = (request) => app.fetch(request);
 
@@ -84,6 +107,7 @@ export async function startTestApi(options: TestApiOptions = {}): Promise<TestAp
     email,
     llm,
     storage,
+    identity,
     client: () => new TestClient(baseUrl, { origin: baseUrl }),
     appClient: (appOrigin) => new TestClient(baseUrl, { "expo-origin": appOrigin }),
     async close() {

@@ -29,8 +29,32 @@ export interface ObjectStorage {
   deletePrefix(prefix: string): Promise<void>;
 }
 
+export type SocialProviderId = "google" | "apple";
+
+/** Who a social provider says signed in, read from an ID token it issued. */
+export interface VerifiedIdentity {
+  /** The provider's stable ID for the person (the token's `sub`). */
+  subject: string;
+  email?: string;
+  emailVerified: boolean;
+  name?: string;
+}
+
+/**
+ * Checks ID tokens that the app got from Google or Apple through native sign-in.
+ * Returns null for a token the provider didn't issue, or one issued for a different nonce.
+ */
+export interface IdentityTokenVerifier {
+  verify(provider: SocialProviderId, token: string, nonce?: string): Promise<VerifiedIdentity | null>;
+}
+
 export interface Ports {
   email: EmailSender;
   llm: LlmProvider;
   storage: ObjectStorage;
+  /**
+   * Leave unset in production: Better Auth then verifies ID tokens itself against
+   * Google's and Apple's published signing keys. Tests set it to a fake provider.
+   */
+  identityTokens?: IdentityTokenVerifier;
 }
