@@ -73,6 +73,17 @@ const ISSUERS: Record<SocialProviderId, string> = {
   apple: "https://appleid.apple.com",
 };
 
+/** Where the API swaps a browser sign-in's code for the person's ID token. */
+const TOKEN_ENDPOINTS: Record<string, SocialProviderId> = {
+  "https://oauth2.googleapis.com/token": "google",
+  "https://appleid.apple.com/auth/token": "apple",
+};
+
+const AUTHORIZE_ORIGINS: Record<string, SocialProviderId> = {
+  "https://accounts.google.com": "google",
+  "https://appleid.apple.com": "apple",
+};
+
 /**
  * Stands in for Google and Apple. Tests ask it to issue an ID token for a person,
  * as the provider would after native sign-in on the phone. The tokens are real
@@ -81,6 +92,49 @@ const ISSUERS: Record<SocialProviderId, string> = {
  */
 export class FakeIdentityProviders implements IdentityTokenVerifier {
   private readonly signingKey = randomBytes(32);
+  private readonly approvals = new Map<
+    string,
+    { provider: SocialProviderId; identity: FakeIdentity; nonce?: string; redirectUri: string }
+  >();
+
+  /**
+   * The person approves the sign-in on the provider's page that the API sent the
+   * browser to. Returns what the provider sends the browser back to the API with.
+   */
+  approve(authorizationUrl: string, identity: FakeIdentity): { code: string; state: string } {
+    const url = new URL(authorizationUrl);
+    const provider = AUTHORIZE_ORIGINS[url.origin];
+    const state = url.searchParams.get("state");
+    const redirectUri = url.searchParams.get("redirect_uri");
+    if (!provider || !state || !redirectUri) throw new Error(`Not a sign-in URL this fake recognises: ${authorizationUrl}`);
+
+    const code = randomBytes(12).toString("hex");
+    this.approvals.set(code, { provider, identity, nonce: url.searchParams.get("nonce") ?? undefined, redirectUri });
+    return { code, state };
+  }
+
+  /**
+   * Answers the API's server-to-server code exchange with Google or Apple, and
+   * nothing else. A code is good once, and only at the provider that issued it.
+   */
+  async answerTokenRequest(url: string, body: string): Promise<Response | null> {
+    const provider = TOKEN_ENDPOINTS[url];
+    if (!provider) return null;
+
+    const params = new URLSearchParams(body);
+    const approval = this.approvals.get(params.get("code") ?? "");
+    if (!approval || approval.provider !== provider || approval.redirectUri !== params.get("redirect_uri")) {
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    }
+    this.approvals.delete(params.get("code")!);
+
+    return Response.json({
+      access_token: randomBytes(12).toString("hex"),
+      token_type: "Bearer",
+      expires_in: 3600,
+      id_token: this.issue(provider, approval.identity, { nonce: approval.nonce }),
+    });
+  }
 
   issue(provider: SocialProviderId, identity: FakeIdentity, options: { nonce?: string } = {}): string {
     const now = Math.floor(Date.now() / 1000);

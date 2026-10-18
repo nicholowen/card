@@ -153,6 +153,84 @@ describe("signing in with Google or Apple", () => {
   });
 });
 
+/**
+ * What the app does for Google, and for Apple on Android: ask the API where to
+ * send the browser, have the person approve at the provider, then follow the
+ * provider's redirect back to the API, which hands the session to the app.
+ */
+async function signInThroughBrowser(
+  api: TestApi,
+  phone: TestClient,
+  provider: SocialProviderId,
+  identity: Parameters<TestApi["identity"]["issue"]>[1],
+) {
+  const started = await phone.post<{ url: string }>("/api/auth/sign-in/social", { provider, callbackURL: "card:///" });
+  const { code, state } = api.identity.approve(started.body.url, identity);
+  return phone.getWithoutFollowing(`/api/auth/callback/${provider}?${new URLSearchParams({ code, state })}`);
+}
+
+describe("signing in with Google or Apple in the browser", () => {
+  let api: TestApi;
+
+  beforeEach(async () => {
+    api = await startTestApi();
+  });
+
+  afterEach(async () => {
+    await api.close();
+  });
+
+  it.each(["google", "apple"] as const)(
+    "creates an Account through %s and hands the session back to the app",
+    async (provider) => {
+      const phone = api.appClient("card://");
+
+      const returned = await signInThroughBrowser(api, phone, provider, {
+        subject: `${provider}-owen`,
+        email: "owen@example.com",
+        emailVerified: true,
+        name: "Owen Nicholson",
+      });
+
+      expect(returned.status).toBe(302);
+      const back = new URL(returned.location!);
+      expect(back.protocol).toBe("card:");
+      expect(back.searchParams.get("cookie")).toBeTruthy();
+      const session = await phone.get<Session>("/api/auth/get-session");
+      expect(session.body.user).toMatchObject({ email: "owen@example.com", role: "member" });
+    },
+  );
+
+  it("signs a person who used Google before into the same Account on another device", async () => {
+    const identity = { subject: "google-owen", email: "owen@example.com", emailVerified: true };
+
+    const firstPhone = api.appClient("card://");
+    await signInThroughBrowser(api, firstPhone, "google", identity);
+    const secondPhone = api.appClient("card://");
+    await signInThroughBrowser(api, secondPhone, "google", identity);
+
+    const first = await accountIdOf(firstPhone);
+    expect(first).not.toBeNull();
+    expect(await accountIdOf(secondPhone)).toBe(first);
+  });
+
+  it("doesn't sign in with a code the provider didn't issue", async () => {
+    const phone = api.appClient("card://");
+    const started = await phone.post<{ url: string }>("/api/auth/sign-in/social", {
+      provider: "google",
+      callbackURL: "card:///",
+    });
+    const state = new URL(started.body.url).searchParams.get("state")!;
+
+    const returned = await phone.getWithoutFollowing(
+      `/api/auth/callback/google?${new URLSearchParams({ code: "made-up-code", state })}`,
+    );
+
+    expect(new URL(returned.location!).searchParams.get("error")).toBeTruthy();
+    expect(await accountIdOf(phone)).toBeNull();
+  });
+});
+
 describe("starting a browser sign-in from the app", () => {
   let api: TestApi;
 

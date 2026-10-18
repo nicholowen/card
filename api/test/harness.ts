@@ -82,6 +82,7 @@ export async function startTestApi(options: TestApiOptions = {}): Promise<TestAp
   const llm = new FakeLlmProvider();
   const storage = new InMemoryObjectStorage();
   const identity = new FakeIdentityProviders();
+  const restoreFetch = routeProviderTokenRequestsTo(identity);
 
   // The auth base URL must be the real listening address, which is only known
   // once the server is bound, so the app is created after listen().
@@ -112,8 +113,26 @@ export async function startTestApi(options: TestApiOptions = {}): Promise<TestAp
     appClient: (appOrigin) => new TestClient(baseUrl, { "expo-origin": appOrigin }),
     async close() {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+      restoreFetch();
       await dropSchema();
     },
+  };
+}
+
+/**
+ * The API exchanges browser sign-in codes with Google and Apple over HTTPS.
+ * Tests run the API in-process, so those requests are answered by the fake
+ * instead of leaving the machine. Every other request goes through untouched.
+ */
+function routeProviderTokenRequestsTo(identity: FakeIdentityProviders): () => void {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const answered = await identity.answerTokenRequest(request.url, await request.clone().text());
+    return answered ?? realFetch(input, init);
+  };
+  return () => {
+    globalThis.fetch = realFetch;
   };
 }
 
@@ -139,7 +158,20 @@ export class TestClient {
     return this.request<T>("POST", path, body);
   }
 
+  /** A GET that reports a redirect instead of following it, as a browser handing back to the app would. */
+  async getWithoutFollowing(path: string): Promise<{ status: number; location: string | null }> {
+    const response = await this.send("GET", path, undefined, "manual");
+    await response.body?.cancel();
+    return { status: response.status, location: response.headers.get("location") };
+  }
+
   private async request<T>(method: string, path: string, body?: unknown): Promise<TestResponse<T>> {
+    const response = await this.send(method, path, body, "follow");
+    const text = await response.text();
+    return { status: response.status, body: (text ? JSON.parse(text) : null) as T };
+  }
+
+  private async send(method: string, path: string, body: unknown, redirect: RequestRedirect): Promise<Response> {
     const headers: Record<string, string> = { ...this.originHeaders };
     if (body !== undefined) headers["content-type"] = "application/json";
     if (this.cookies.size > 0) {
@@ -150,6 +182,7 @@ export class TestClient {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      redirect,
     });
 
     for (const setCookie of response.headers.getSetCookie()) {
@@ -160,8 +193,6 @@ export class TestClient {
       if (value === "") this.cookies.delete(name);
       else this.cookies.set(name, value);
     }
-
-    const text = await response.text();
-    return { status: response.status, body: (text ? JSON.parse(text) : null) as T };
+    return response;
   }
 }
