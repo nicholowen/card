@@ -21,7 +21,10 @@ Rules:
 - website: the company or personal website, not a social profile.
 - address: the street or postal address on one line, parts separated by commas.
 - socials: social profiles such as LinkedIn, Instagram, X, Facebook or GitHub. network is the service's name; handle is the username or profile path.
-- OCR makes mistakes (0 for O, 1 for l, stray characters). Correct obvious ones.
+- OCR makes mistakes, especially where a design line or background crosses the text: E for F, rn for m, cl for d, 0 for O, I or l for 1, stray characters.
+  - Names, job titles and company names are made of real words and real names. A word that isn't one (such as "Erench" for "French") was probably misread: correct it when the right word is clear.
+  - In phone numbers and postcodes, I or l among digits is 1, and O is 0.
+  - Whenever you correct a misread, set that field's confidence below 0.6, so the person checks it against the card.
 - confidence is how sure you are that the value is right and in the right field, from 0 to 1. Use below 0.6 when you corrected OCR, guessed between fields, or the text was unclear.`;
 
 const FIELD = {
