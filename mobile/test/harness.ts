@@ -6,6 +6,7 @@ import type {
   ApiClient,
   CardImage,
   CardImageStore,
+  CloudParse,
   LocalDatabase,
   OcrAdapter,
   OnDeviceParser,
@@ -72,15 +73,17 @@ export class FakeApiClient implements ApiClient {
   online = true;
   /** Set to make the API's Parse fail, as when the LLM provider is down. */
   parseFails = false;
+  /** How the API says it parsed the card. */
+  parsedBy: CloudParse["parsedBy"] = "cloud-text";
   fields: ParsedFields = {};
   /** The text of each Parse the API received. */
   readonly parseCalls: string[] = [];
-  async parseCardText(text: string) {
+  async parseCardText(text: string): Promise<CloudParse> {
     if (!this.online) throw new Error("Network request failed");
     if (!this.signedIn) throw new Error("401 not-signed-in");
     this.parseCalls.push(text);
     if (this.parseFails) throw new Error("502 parse-failed");
-    return this.fields;
+    return { parsedBy: this.parsedBy, fields: this.fields };
   }
 }
 

@@ -51,24 +51,29 @@ export type ParseUsage = Record<CloudParsedBy, number>;
  * call to the LLM is metered against the Account that asked for it.
  */
 export function createParser({ llm, pool }: { llm: LlmProvider; pool: Pool }) {
-  async function meter(accountId: string, parsedBy: CloudParsedBy) {
-    await pool.query("INSERT INTO parse_call (account_id, parsed_by) VALUES ($1, $2)", [accountId, parsedBy]);
+  async function meter(accountId: string, parsedBy: CloudParsedBy, succeeded: boolean) {
+    await pool.query("INSERT INTO parse_call (account_id, parsed_by, succeeded) VALUES ($1, $2, $3)", [
+      accountId,
+      parsedBy,
+      succeeded,
+    ]);
   }
 
   return {
     /**
      * Parses a Scan's recognised text. Throws ParseFailed when the LLM call
-     * fails; only calls that return a result are metered, so a provider outage
-     * never counts against an Account.
+     * fails. Every call is metered, failed ones too (a provider may charge for
+     * them), with whether it succeeded.
      */
     async parseText(accountId: string, text: string): Promise<ParseResult> {
       let fields: ParsedFields;
       try {
         fields = await llm.parseCardText({ text });
       } catch (cause) {
+        await meter(accountId, "cloud-text", false);
         throw new ParseFailed(cause);
       }
-      await meter(accountId, "cloud-text");
+      await meter(accountId, "cloud-text", true);
       return { parsedBy: "cloud-text", fields: cardFieldsFrom(fields) };
     },
 

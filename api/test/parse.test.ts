@@ -92,7 +92,7 @@ describe("parsing a Scan's recognised text in the cloud", () => {
     expect((await phone.get("/api/parse/usage")).body).toEqual({ "cloud-text": 0, "cloud-vision": 0 });
   });
 
-  it("reports a failed LLM call, so the app can parse on the device instead, and doesn't meter it", async () => {
+  it("reports a failed LLM call, so the app can parse on the device instead", async () => {
     const phone = await signIn(api, "owen@example.com");
     api.llm.failure = new Error("provider overloaded");
 
@@ -100,7 +100,6 @@ describe("parsing a Scan's recognised text in the cloud", () => {
 
     expect(parsed.status).toBe(502);
     expect(parsed.body).toEqual({ error: "parse-failed" });
-    expect((await phone.get("/api/parse/usage")).body).toEqual({ "cloud-text": 0, "cloud-vision": 0 });
   });
 
   it("refuses someone who isn't signed in, without calling the LLM", async () => {
@@ -135,6 +134,15 @@ describe("metering Parse calls per Account", () => {
 
     expect((await owen.get("/api/parse/usage")).body).toEqual({ "cloud-text": 2, "cloud-vision": 0 });
     expect((await aroha.get("/api/parse/usage")).body).toEqual({ "cloud-text": 1, "cloud-vision": 0 });
+  });
+
+  it("counts a call the LLM provider failed, since the provider may still charge for it", async () => {
+    const owen = await signIn(api, "owen@example.com");
+    api.llm.failure = new Error("provider overloaded");
+
+    await owen.post("/api/parse", { text: CARD_TEXT });
+
+    expect((await owen.get("/api/parse/usage")).body).toEqual({ "cloud-text": 1, "cloud-vision": 0 });
   });
 
   it("starts a new Account at zero", async () => {

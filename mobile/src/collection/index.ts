@@ -171,7 +171,8 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
     // With no text there's nothing for the text Parse to read.
     if (text) {
       try {
-        return { parsed: await deps.api.parseCardText(text), parsedBy: "cloud-text" };
+        const cloud = await deps.api.parseCardText(text);
+        return { parsed: cloud.fields, parsedBy: cloud.parsedBy };
       } catch {
         // Signed out, offline, or the API couldn't parse it: the device Parse still works.
       }

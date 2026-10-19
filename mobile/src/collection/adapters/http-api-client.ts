@@ -1,4 +1,4 @@
-import type { ApiClient, ParsedFields } from "../ports";
+import type { ApiClient, CloudParse } from "../ports";
 
 /**
  * How long a cloud Parse may take before the Collection gives up and parses on
@@ -47,9 +47,6 @@ export function httpApiClient({ baseUrl, cookie }: { baseUrl: string; cookie: ()
   }
 
   return {
-    async parseCardText(text) {
-      const result = await post<{ parsedBy: string; fields: ParsedFields }>("/api/parse", { text }, PARSE_TIMEOUT_MS);
-      return result.fields;
-    },
+    parseCardText: (text) => post<CloudParse>("/api/parse", { text }, PARSE_TIMEOUT_MS),
   };
 }

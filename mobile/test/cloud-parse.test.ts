@@ -47,6 +47,19 @@ describe("parsing a scanned card in the cloud", () => {
     expect(await reopened.get(card.id)).toMatchObject({ source: "scan", parsedBy: "cloud-text" });
   });
 
+  it("records how the API says it parsed the card", async () => {
+    const { collection, deps } = await signedInCollection();
+    deps.ocr.lines = ["AROHA"];
+    deps.api.parsedBy = "cloud-vision";
+    deps.api.fields = { name: { value: "Aroha Ngata", confidence: 0.8 } };
+
+    const review = await collection.scan(FRONT);
+    const card = await collection.saveScan(review, review.fields);
+
+    expect(review.parsedBy).toBe("cloud-vision");
+    expect(await collection.get(card.id)).toMatchObject({ parsedBy: "cloud-vision" });
+  });
+
   it("flags the fields the cloud Parse isn't confident about, so the Holder knows which to check", async () => {
     const { collection, deps } = await signedInCollection();
     deps.ocr.lines = ["Aroha Ngata", "KOWHAI", "12 Cuba St"];

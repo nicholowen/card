@@ -100,7 +100,7 @@ Either way the fields are shown for review with low-confidence ones marked "Chec
 
 No LLM provider is wired up yet: until one is (behind the `LlmProvider` port in `api/src/ports.ts`), the API answers every Parse with `502 parse-failed`, logs `[parse] LLM call failed`, and the app falls back to the device Parse. Pick the provider by checking its zero-data-retention and no-training terms first (spec, Further Notes).
 
-Every successful cloud Parse is recorded in `parse_call` against the Account, ready for a free-tier limit later. A signed-in Account can read its own counts at `GET /api/parse/usage`.
+Every call to the LLM provider is recorded in `parse_call` against the Account, with whether it succeeded, ready for a free-tier limit and a Parse success rate later. A signed-in Account can read its own counts at `GET /api/parse/usage`.
 
 When scanning fails, the console shows the native error code and reason (lines starting `[card-scanner]`), and in development the Scan screen shows it under the message.
 

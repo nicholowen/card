@@ -59,9 +59,16 @@ export function socialFieldKey(network: string): string {
 
 export const SOCIAL_FIELD_PREFIX = "social:";
 
-/** The parts of the API the Collection calls. Grows as sync and cloud Parse arrive. */
+/** The parts of the API the Collection calls. Grows as sync arrives. */
 export interface ApiClient {
-  parseCardText(text: string): Promise<ParsedFields>;
+  /** Parses a Scan's recognised text in the cloud. Throws when signed out, offline, or the Parse fails. */
+  parseCardText(text: string): Promise<CloudParse>;
+}
+
+/** What the cloud Parse found, and how it parsed the card. */
+export interface CloudParse {
+  parsedBy: "cloud-text" | "cloud-vision";
+  fields: ParsedFields;
 }
 
 /** One parsed field value with its Field Confidence (0..1). */
