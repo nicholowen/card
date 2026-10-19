@@ -21,8 +21,11 @@ Rules:
 - website: the company or personal website, not a social profile.
 - address: the street or postal address on one line, parts separated by commas.
 - socials: social profiles such as LinkedIn, Instagram, X, Facebook or GitHub. network is the service's name; handle is the username or profile path.
-- OCR makes mistakes (0 for O, 1 for l, stray characters). Correct obvious ones.
-- confidence is how sure you are that the value is right and in the right field, from 0 to 1. Use below 0.6 when you corrected OCR, guessed between fields, or the text was unclear.`;
+- The text comes from OCR, which can misread letters, especially where a design crosses the text.
+  - Keep people's names and company names exactly as read. Names from every culture look unfamiliar to someone; never change one because it is unusual or resembles a more common name.
+  - Change a name or company only when another part of the card shows a different spelling of it (for example in the email address or website), and then use that spelling.
+  - In phone numbers, postcodes, email addresses and websites, fix characters that can't belong there, such as a letter I or O among digits.
+- confidence is how sure you are that the value is right and in the right field, from 0 to 1. It reflects the evidence in the text, not how familiar a word looks. Use below 0.6 when you changed what OCR read, when parts of the card disagree, when the text has stray characters or broken words, or when you guessed which field it belongs in.`;
 
 const FIELD = {
   anyOf: [
