@@ -89,13 +89,13 @@ export class FakeApiClient implements ApiClient {
   /** The photo of each vision Parse the API received. */
   readonly imageParseCalls: string[] = [];
 
-  private reach() {
+  private ensureReachable() {
     if (!this.online) throw new Error("Network request failed");
     if (!this.signedIn) throw new Error("401 not-signed-in");
   }
 
   async parseCardText(text: string): Promise<TextParse> {
-    this.reach();
+    this.ensureReachable();
     this.parseCalls.push(text);
     if (this.textTooShort) return { parsedBy: null, imageWanted: true };
     if (this.parseFails) throw new Error("502 parse-failed");
@@ -103,7 +103,7 @@ export class FakeApiClient implements ApiClient {
   }
 
   async parseCardImage(image: CardImage): Promise<CloudParse> {
-    this.reach();
+    this.ensureReachable();
     this.imageParseCalls.push(image.uri);
     if (this.imageParseFails) throw new Error("502 parse-failed");
     return { parsedBy: "cloud-vision", fields: this.imageFields };

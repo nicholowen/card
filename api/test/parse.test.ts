@@ -216,7 +216,7 @@ describe("parsing a card from its image with a vision model", () => {
         company: { value: "Kōwhai Labs", confidence: 1 },
       },
     });
-    expect(api.llm.calls).toEqual([{ kind: "image", mimeType: "image/jpeg" }]);
+    expect(api.llm.calls).toEqual([{ kind: "image", image: new Uint8Array(2048).fill(0xff), mimeType: "image/jpeg" }]);
   });
 
   it("meters a vision Parse separately from text Parses", async () => {

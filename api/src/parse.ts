@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { LlmProvider, ParsedFields } from "./ports.ts";
+import type { CardPhoto, CardPhotoType, LlmProvider, ParsedFields } from "./ports.ts";
 
 /** Where a card was parsed (`card_copy.parsed_by`). The API only ever parses in the cloud. */
 export type CloudParsedBy = "cloud-text" | "cloud-vision";
@@ -74,8 +74,12 @@ function cardFieldsFrom(returned: ParsedFields): ParsedFields {
   return fields;
 }
 
-/** The photo formats a vision Parse accepts: the ones the vision model reads. The app's scanners take JPEGs. */
-export const PARSE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+const CARD_PHOTO_TYPES: readonly CardPhotoType[] = ["image/jpeg", "image/png", "image/webp"];
+
+/** Whether a vision Parse can read a photo of this type. */
+export function isCardPhotoType(type: string): type is CardPhotoType {
+  return (CARD_PHOTO_TYPES as readonly string[]).includes(type);
+}
 
 /**
  * The largest photo a vision Parse accepts. The Claude API takes images up to
@@ -103,11 +107,11 @@ export type ParseUsage = Record<CloudParsedBy, number>;
 export function createParser({
   llm,
   pool,
-  fallback = DEFAULT_VISION_FALLBACK,
+  visionFallback = DEFAULT_VISION_FALLBACK,
 }: {
   llm: LlmProvider;
   pool: Pool;
-  fallback?: VisionFallbackThresholds;
+  visionFallback?: VisionFallbackThresholds;
 }) {
   async function meter(accountId: string, parsedBy: CloudParsedBy, succeeded: boolean) {
     await pool.query("INSERT INTO parse_call (account_id, parsed_by, succeeded) VALUES ($1, $2, $3)", [
@@ -117,27 +121,38 @@ export function createParser({
     ]);
   }
 
+  /**
+   * Makes one LLM call and meters it, failed ones too (a provider may charge
+   * for them), with whether it succeeded. Throws ParseFailed when it fails.
+   */
+  async function metered(
+    accountId: string,
+    parsedBy: CloudParsedBy,
+    call: () => Promise<ParsedFields>,
+  ): Promise<ParsedFields> {
+    let returned: ParsedFields;
+    try {
+      returned = await call();
+    } catch (cause) {
+      await meter(accountId, parsedBy, false);
+      throw new ParseFailed(cause);
+    }
+    await meter(accountId, parsedBy, true);
+    return cardFieldsFrom(returned);
+  }
+
   return {
     /**
      * Parses a Scan's recognised text, or asks for the card's image when the
      * text is too short or the Parse unsure (see VisionFallbackThresholds).
-     * Throws ParseFailed when the LLM call fails. Every call is metered, failed
-     * ones too (a provider may charge for them), with whether it succeeded.
+     * Throws ParseFailed when the LLM call fails. Every LLM call is metered.
      */
     async parseText(accountId: string, text: string): Promise<TextParseResult> {
-      if (text.trim().length < fallback.belowTextLength) return { parsedBy: null, imageWanted: true };
-      let returned: ParsedFields;
-      try {
-        returned = await llm.parseCardText({ text });
-      } catch (cause) {
-        await meter(accountId, "cloud-text", false);
-        throw new ParseFailed(cause);
-      }
-      await meter(accountId, "cloud-text", true);
-      const fields = cardFieldsFrom(returned);
+      if (text.trim().length < visionFallback.belowTextLength) return { parsedBy: null, imageWanted: true };
+      const fields = await metered(accountId, "cloud-text", () => llm.parseCardText({ text }));
       return {
         parsedBy: "cloud-text",
-        imageWanted: overallConfidence(fields) < fallback.belowConfidence,
+        imageWanted: overallConfidence(fields) < visionFallback.belowConfidence,
         fields,
       };
     },
@@ -147,16 +162,8 @@ export function createParser({
      * whose text the text Parse couldn't read (ADR 0004). Throws ParseFailed
      * when the LLM call fails. Metered like a text Parse, as `cloud-vision`.
      */
-    async parseImage(accountId: string, image: Uint8Array, mimeType: string): Promise<ParseResult> {
-      let returned: ParsedFields;
-      try {
-        returned = await llm.parseCardImage({ image, mimeType });
-      } catch (cause) {
-        await meter(accountId, "cloud-vision", false);
-        throw new ParseFailed(cause);
-      }
-      await meter(accountId, "cloud-vision", true);
-      return { parsedBy: "cloud-vision", fields: cardFieldsFrom(returned) };
+    async parseImage(accountId: string, photo: CardPhoto): Promise<ParseResult> {
+      return { parsedBy: "cloud-vision", fields: await metered(accountId, "cloud-vision", () => llm.parseCardImage(photo)) };
     },
 
     async usage(accountId: string): Promise<ParseUsage> {

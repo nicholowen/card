@@ -185,7 +185,8 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
     if (!textParse || textParse.imageWanted) {
       try {
         const vision = await deps.api.parseCardImage(front);
-        return { parsed: vision.fields, parsedBy: vision.parsedBy };
+        // A photo the vision model found nothing on is no better than the text Parse.
+        if (Object.keys(vision.fields).length > 0) return { parsed: vision.fields, parsedBy: vision.parsedBy };
       } catch {
         // The text Parse's fields are still better than nothing, if there was one.
       }

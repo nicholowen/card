@@ -11,7 +11,16 @@ export type OneTimeCodePurpose = "sign-in" | "email-verification" | "forget-pass
 /** Turns a Scan's recognised text (and optionally its image) into structured card fields (ADR 0004). */
 export interface LlmProvider {
   parseCardText(input: { text: string }): Promise<ParsedFields>;
-  parseCardImage(input: { image: Uint8Array; mimeType: string }): Promise<ParsedFields>;
+  parseCardImage(input: CardPhoto): Promise<ParsedFields>;
+}
+
+/** The photo formats a vision Parse reads. The app's scanners take JPEGs. */
+export type CardPhotoType = "image/jpeg" | "image/png" | "image/webp";
+
+/** A card's photo, for a vision Parse. */
+export interface CardPhoto {
+  image: Uint8Array;
+  mimeType: CardPhotoType;
 }
 
 /** One parsed field value with its Field Confidence (0..1). */

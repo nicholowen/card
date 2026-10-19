@@ -4,8 +4,8 @@ import type { Pool } from "pg";
 import { createAuth, type SocialProvidersConfig } from "./auth.ts";
 import {
   createParser,
+  isCardPhotoType,
   MAX_PARSE_IMAGE_BYTES,
-  PARSE_IMAGE_TYPES,
   ParseFailed,
   type VisionFallbackThresholds,
 } from "./parse.ts";
@@ -44,7 +44,7 @@ export function createApp(config: AppConfig) {
 
   const app = new Hono<{ Variables: { accountId: string } }>();
 
-  const parser = createParser({ llm: config.ports.llm, pool: config.pool, fallback: config.visionFallback });
+  const parser = createParser({ llm: config.ports.llm, pool: config.pool, visionFallback: config.visionFallback });
 
   /** The signed-in Account's id, or null. Better Auth calls the Account a "user". */
   async function accountIdOf(request: Request): Promise<string | null> {
@@ -93,12 +93,11 @@ export function createApp(config: AppConfig) {
       const image = form?.get("image");
       if (!(image instanceof File) || image.size === 0) return c.json({ error: "no-image" }, 400);
       if (image.size > MAX_PARSE_IMAGE_BYTES) return c.json({ error: "image-too-large" }, 413);
-      if (!(PARSE_IMAGE_TYPES as readonly string[]).includes(image.type)) {
-        return c.json({ error: "unsupported-image-type" }, 400);
-      }
+      const mimeType = image.type;
+      if (!isCardPhotoType(mimeType)) return c.json({ error: "unsupported-image-type" }, 400);
       const bytes = new Uint8Array(await image.arrayBuffer());
       try {
-        return c.json(await parser.parseImage(c.get("accountId"), bytes, image.type));
+        return c.json(await parser.parseImage(c.get("accountId"), { image: bytes, mimeType }));
       } catch (error) {
         if (!(error instanceof ParseFailed)) throw error;
         // The photo stays out of the log; only the provider's reason goes in.

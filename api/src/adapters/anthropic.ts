@@ -79,10 +79,6 @@ type ParsedCard = Record<(typeof CARD_TEXT_FIELDS)[number], ParsedCardField> & {
   socials: { network: string; handle: string; confidence: number }[];
 };
 
-/** The photo formats Claude reads. */
-const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
-type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
-
 /**
  * The LLM provider as Claude Haiku on the Claude API. A card's recognised text
  * is sent, and its photo only when the text Parse wasn't enough (ADR 0004).
@@ -116,7 +112,7 @@ export function anthropicLlmProvider({
       {
         model,
         max_tokens: 1024,
-        // Extraction from one card needs no deliberation: the fastest setting.
+        // Parsing one card needs no deliberation: the fastest setting.
         thinking: { type: "disabled" },
         output_config: { effort: "low", format: { type: "json_schema", schema: CARD_SCHEMA } },
         system,
@@ -133,14 +129,7 @@ export function anthropicLlmProvider({
     parseCardText: ({ text }) => ask(TEXT_INSTRUCTIONS, `<card_text>\n${text}\n</card_text>`, TEXT_TIMEOUT_MS),
 
     async parseCardImage({ image, mimeType }) {
-      if (!(IMAGE_MEDIA_TYPES as readonly string[]).includes(mimeType)) {
-        throw new Error(`${model} can't read a ${mimeType} image`);
-      }
-      const source = {
-        type: "base64",
-        media_type: mimeType as ImageMediaType,
-        data: Buffer.from(image).toString("base64"),
-      } as const;
+      const source = { type: "base64", media_type: mimeType, data: Buffer.from(image).toString("base64") } as const;
       return ask(IMAGE_INSTRUCTIONS, [{ type: "image", source }], IMAGE_TIMEOUT_MS);
     },
   };

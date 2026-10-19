@@ -180,6 +180,18 @@ describe("parsing a stylised card from its photo (vision fallback)", () => {
     expect(deps.parser.calls).toEqual([]);
   });
 
+  it("keeps the text Parse's fields when the vision Parse finds nothing on the photo", async () => {
+    const { collection, deps } = await signedInCollection();
+    deps.ocr.lines = ["AROHA", "aroha@kowhai.example"];
+    deps.api.imageWanted = true;
+    deps.api.fields = { name: { value: "AROHA", confidence: 0.4 } };
+    deps.api.imageFields = {};
+
+    const review = await collection.scan(FRONT);
+
+    expect(review).toMatchObject({ parsedBy: "cloud-text", fields: { name: "AROHA" } });
+  });
+
   it("parses on the device when the vision Parse fails and there was no text Parse", async () => {
     const { collection, deps } = await signedInCollection();
     deps.ocr.lines = ["AROHA"];

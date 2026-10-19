@@ -8,3 +8,4 @@ Sending text instead of images is cheaper, faster and sends less personal data o
 
 - The LLM provider has to offer zero data retention and no training on inputs.
 - Android always uses the cloud LLM for now, since on-device LLM support is mostly limited to iOS.
+- The fallback is two requests, not one. The app sends the text; the API answers `imageWanted` when the fields' mean Field Confidence or the text's length is below a configurable threshold; only then does the app upload the photo for a vision Parse. The photo leaves the phone only when the text wasn't enough, and the text call isn't paid for twice. A card that falls back is metered as both a text and a vision call.

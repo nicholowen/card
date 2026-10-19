@@ -9,7 +9,7 @@ import { extname } from "node:path";
 import { parseArgs } from "node:util";
 import { anthropicLlmProvider } from "../src/adapters/anthropic.ts";
 import { loadLlm } from "../src/config.ts";
-import type { ParsedFields } from "../src/ports.ts";
+import type { CardPhotoType, ParsedFields } from "../src/ports.ts";
 
 const { values, positionals: cardLines } = parseArgs({ options: { photo: { type: "string" } }, allowPositionals: true });
 const photo = values.photo;
@@ -23,7 +23,7 @@ if (!settings) {
 }
 
 const llm = anthropicLlmProvider(settings);
-const MIME_TYPES: Record<string, string> = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp" };
+const PHOTO_TYPES: Record<string, CardPhotoType> = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp" };
 
 async function check(what: string, parse: () => Promise<ParsedFields>) {
   const started = Date.now();
@@ -39,7 +39,7 @@ async function check(what: string, parse: () => Promise<ParsedFields>) {
 
 await check("the sample card's text", () => llm.parseCardText({ text: SAMPLE_CARD }));
 if (photo) {
-  const mimeType = MIME_TYPES[extname(photo).toLowerCase()];
+  const mimeType = PHOTO_TYPES[extname(photo).toLowerCase()];
   if (!mimeType) {
     console.error(`${photo} isn't a JPEG, PNG or WebP photo.`);
     process.exit(1);
