@@ -1,5 +1,6 @@
 import { DEFAULT_ANTHROPIC_MODEL } from "./adapters/anthropic.ts";
 import type { SocialProvidersConfig } from "./auth.ts";
+import { DEFAULT_VISION_FALLBACK, type VisionFallbackThresholds } from "./parse.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -45,6 +46,25 @@ export function loadConfig() {
       .filter(Boolean),
     socialProviders: loadSocialProviders(),
     llm: loadLlm(),
+    visionFallback: loadVisionFallback(),
+  };
+}
+
+function optionalNumber(name: string, { min, max }: { min: number; max: number }): number | undefined {
+  const value = optional(name);
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new Error(`Environment variable ${name} must be a number from ${min} to ${max}, not "${value}"`);
+  }
+  return number;
+}
+
+/** When a text Parse asks for the card's image instead (ADR 0004). Unset settings keep the defaults. */
+export function loadVisionFallback(): VisionFallbackThresholds {
+  return {
+    belowConfidence: optionalNumber("PARSE_VISION_BELOW_CONFIDENCE", { min: 0, max: 1 }) ?? DEFAULT_VISION_FALLBACK.belowConfidence,
+    belowTextLength: optionalNumber("PARSE_VISION_BELOW_TEXT_LENGTH", { min: 0, max: 4000 }) ?? DEFAULT_VISION_FALLBACK.belowTextLength,
   };
 }
 

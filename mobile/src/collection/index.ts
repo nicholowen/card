@@ -7,6 +7,7 @@ import type {
   OnDeviceParser,
   ParsedFields,
   RecognisedText,
+  TextParse,
 } from "./ports";
 import { SOCIAL_FIELD_PREFIX } from "./ports";
 import { textInReadingOrder } from "./reading-order";
@@ -163,20 +164,38 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
   }
 
   /**
-   * Parses what OCR read (ADR 0004): in the cloud when the API answers, which
-   * needs a signed-in Holder with signal, otherwise on the device.
+   * Parses a scanned card (ADR 0004): in the cloud when the API answers, which
+   * needs a signed-in Holder with signal, otherwise on the device. The cloud
+   * reads the card's text, and its photo only when the API asks for it, since
+   * the text wasn't enough (a stylised font, a logo, a vertical layout). The
+   * photo leaves the phone only then (spec story 2).
    */
-  async function parse(recognised: RecognisedText): Promise<{ parsed: ParsedFields; parsedBy: ParsedBy }> {
+  async function parse(front: CardImage, recognised: RecognisedText): Promise<{ parsed: ParsedFields; parsedBy: ParsedBy }> {
     const text = textInReadingOrder(recognised);
-    // With no text there's nothing for the text Parse to read.
+    let textParse: TextParse | null = null;
     if (text) {
       try {
-        const cloud = await deps.api.parseCardText(text);
-        return { parsed: cloud.fields, parsedBy: cloud.parsedBy };
+        textParse = await deps.api.parseCardText(text);
       } catch {
         // Signed out, offline, or the API couldn't parse it: the device Parse still works.
+        return parseOnDevice(recognised);
       }
     }
+    // With no text at all there's nothing for a text Parse to read, but the photo may still be readable.
+    if (!textParse || textParse.imageWanted) {
+      try {
+        const vision = await deps.api.parseCardImage(front);
+        // A photo the vision model found nothing on is no better than the text Parse.
+        if (Object.keys(vision.fields).length > 0) return { parsed: vision.fields, parsedBy: vision.parsedBy };
+      } catch {
+        // The text Parse's fields are still better than nothing, if there was one.
+      }
+    }
+    if (textParse?.parsedBy) return { parsed: textParse.fields, parsedBy: textParse.parsedBy };
+    return parseOnDevice(recognised);
+  }
+
+  async function parseOnDevice(recognised: RecognisedText): Promise<{ parsed: ParsedFields; parsedBy: ParsedBy }> {
     return { parsed: await deps.parser.parse(recognised), parsedBy: "device" };
   }
 
@@ -210,7 +229,7 @@ export async function openCollection(deps: CollectionDependencies): Promise<Coll
 
     async scan(front) {
       const recognised = await deps.ocr.recognise(front);
-      const { parsed, parsedBy } = await parse(recognised);
+      const { parsed, parsedBy } = await parse(front, recognised);
       const fields = toCardFields(parsed);
       return {
         front,

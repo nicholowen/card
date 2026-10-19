@@ -25,6 +25,7 @@ if (process.argv.includes("--migrate-only")) {
     trustedOrigins: config.trustedOrigins,
     development: config.development,
     socialProviders: config.socialProviders,
+    visionFallback: config.visionFallback,
   });
   serve({ fetch: app.fetch, port: config.port, hostname: "0.0.0.0" }, (info) => {
     console.log(`API listening on http://localhost:${info.port}`);

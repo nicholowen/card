@@ -61,9 +61,27 @@ export const SOCIAL_FIELD_PREFIX = "social:";
 
 /** The parts of the API the Collection calls. Grows as sync arrives. */
 export interface ApiClient {
-  /** Parses a Scan's recognised text in the cloud. Throws when signed out, offline, or the Parse fails. */
-  parseCardText(text: string): Promise<CloudParse>;
+  /**
+   * Parses a Scan's recognised text in the cloud. The API may ask for the
+   * card's photo instead (`imageWanted`). Throws when signed out, offline, or
+   * the Parse fails.
+   */
+  parseCardText(text: string): Promise<TextParse>;
+  /**
+   * Parses a card from its photo with a vision model: the fallback for cards
+   * whose text wasn't enough (ADR 0004). Throws when signed out, offline, or
+   * the Parse fails.
+   */
+  parseCardImage(image: CardImage): Promise<CloudParse>;
 }
+
+/**
+ * A text Parse's answer. When the text Parse is unsure, or OCR read too little
+ * to make one (`parsedBy: null`), the API asks for the card's photo.
+ */
+export type TextParse =
+  | (CloudParse & { parsedBy: "cloud-text"; imageWanted: boolean })
+  | { parsedBy: null; imageWanted: true };
 
 /** What the cloud Parse found, and how it parsed the card. */
 export interface CloudParse {

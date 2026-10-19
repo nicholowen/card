@@ -16,4 +16,7 @@ export const signedOutApiClient: ApiClient = {
   parseCardText: async () => {
     throw new NotSignedIn();
   },
+  parseCardImage: async () => {
+    throw new NotSignedIn();
+  },
 };

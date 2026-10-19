@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type {
+  CardPhoto,
   EmailSender,
   IdentityTokenVerifier,
   LlmProvider,
@@ -29,7 +30,7 @@ export class FakeLlmProvider implements LlmProvider {
   imageResponse: ParsedFields = {};
   /** Set to make every call fail, as an outage or a rejected request at the provider would. */
   failure: Error | null = null;
-  readonly calls: ({ kind: "text"; text: string } | { kind: "image"; mimeType: string })[] = [];
+  readonly calls: ({ kind: "text"; text: string } | { kind: "image"; image: Uint8Array; mimeType: string })[] = [];
 
   async parseCardText({ text }: { text: string }) {
     this.calls.push({ kind: "text", text });
@@ -37,8 +38,8 @@ export class FakeLlmProvider implements LlmProvider {
     return this.textResponse;
   }
 
-  async parseCardImage({ mimeType }: { image: Uint8Array; mimeType: string }) {
-    this.calls.push({ kind: "image", mimeType });
+  async parseCardImage({ image, mimeType }: CardPhoto) {
+    this.calls.push({ kind: "image", image, mimeType });
     if (this.failure) throw this.failure;
     return this.imageResponse;
   }
