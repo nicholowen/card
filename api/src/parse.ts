@@ -10,6 +10,46 @@ export interface ParseResult {
 }
 
 /**
+ * A text Parse's answer. When the text Parse is unsure, `imageWanted` asks the
+ * app for the card's image, to parse with a vision model instead (ADR 0004).
+ * The app sends the image only then, so a card's photo leaves the phone only
+ * when its text wasn't enough (spec story 2).
+ */
+export type TextParseResult =
+  | (ParseResult & { parsedBy: "cloud-text"; imageWanted: boolean })
+  /** OCR read too little for a text Parse to be worth making: nothing was parsed. */
+  | { parsedBy: null; imageWanted: true };
+
+/** When a text Parse asks for the card's image instead. */
+export interface VisionFallbackThresholds {
+  /** Ask for the image when the fields' overall Field Confidence (their mean) is below this. */
+  belowConfidence: number;
+  /**
+   * Ask for the image without a text Parse when the recognised text, trimmed,
+   * is shorter than this many characters. A stylised card OCR can't read
+   * yields a stray word or two; a plain one gives a name and an email at least.
+   */
+  belowTextLength: number;
+}
+
+/**
+ * Below 0.6 is where the model is told to put values it corrected or guessed,
+ * and where the app flags fields for checking. 20 characters is about a name
+ * and nothing else.
+ */
+export const DEFAULT_VISION_FALLBACK: VisionFallbackThresholds = {
+  belowConfidence: 0.6,
+  belowTextLength: 20,
+};
+
+/** The mean Field Confidence of a Parse's fields; none at all counts as no confidence. */
+function overallConfidence(fields: ParsedFields): number {
+  const confidences = Object.values(fields).map((field) => field.confidence);
+  if (confidences.length === 0) return 0;
+  return confidences.reduce((sum, confidence) => sum + confidence, 0) / confidences.length;
+}
+
+/**
  * The card fields a Parse returns, keyed as the app's Collection keys them.
  * Social handles are keyed `social:<Network>`, such as `social:LinkedIn`.
  * Keep in step with CARD_TEXT_FIELDS in mobile/src/collection.
@@ -34,6 +74,16 @@ function cardFieldsFrom(returned: ParsedFields): ParsedFields {
   return fields;
 }
 
+/** The photo formats a vision Parse accepts: the ones the vision model reads. The app's scanners take JPEGs. */
+export const PARSE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+/**
+ * The largest photo a vision Parse accepts. The Claude API takes images up to
+ * 5 MB once base64-encoded, which is 3.75 MB of photo. A business card cropped
+ * by the phone's document scanner comes to well under that.
+ */
+export const MAX_PARSE_IMAGE_BYTES = 3.75 * 1024 * 1024;
+
 /** Thrown when the LLM provider couldn't parse a card, such as during an outage. */
 export class ParseFailed extends Error {
   constructor(cause: unknown) {
@@ -50,7 +100,15 @@ export type ParseUsage = Record<CloudParsedBy, number>;
  * fields, each with its Field Confidence, using a cheap text-only LLM. Every
  * call to the LLM is metered against the Account that asked for it.
  */
-export function createParser({ llm, pool }: { llm: LlmProvider; pool: Pool }) {
+export function createParser({
+  llm,
+  pool,
+  fallback = DEFAULT_VISION_FALLBACK,
+}: {
+  llm: LlmProvider;
+  pool: Pool;
+  fallback?: VisionFallbackThresholds;
+}) {
   async function meter(accountId: string, parsedBy: CloudParsedBy, succeeded: boolean) {
     await pool.query("INSERT INTO parse_call (account_id, parsed_by, succeeded) VALUES ($1, $2, $3)", [
       accountId,
@@ -61,20 +119,44 @@ export function createParser({ llm, pool }: { llm: LlmProvider; pool: Pool }) {
 
   return {
     /**
-     * Parses a Scan's recognised text. Throws ParseFailed when the LLM call
-     * fails. Every call is metered, failed ones too (a provider may charge for
-     * them), with whether it succeeded.
+     * Parses a Scan's recognised text, or asks for the card's image when the
+     * text is too short or the Parse unsure (see VisionFallbackThresholds).
+     * Throws ParseFailed when the LLM call fails. Every call is metered, failed
+     * ones too (a provider may charge for them), with whether it succeeded.
      */
-    async parseText(accountId: string, text: string): Promise<ParseResult> {
-      let fields: ParsedFields;
+    async parseText(accountId: string, text: string): Promise<TextParseResult> {
+      if (text.trim().length < fallback.belowTextLength) return { parsedBy: null, imageWanted: true };
+      let returned: ParsedFields;
       try {
-        fields = await llm.parseCardText({ text });
+        returned = await llm.parseCardText({ text });
       } catch (cause) {
         await meter(accountId, "cloud-text", false);
         throw new ParseFailed(cause);
       }
       await meter(accountId, "cloud-text", true);
-      return { parsedBy: "cloud-text", fields: cardFieldsFrom(fields) };
+      const fields = cardFieldsFrom(returned);
+      return {
+        parsedBy: "cloud-text",
+        imageWanted: overallConfidence(fields) < fallback.belowConfidence,
+        fields,
+      };
+    },
+
+    /**
+     * Parses a card from its photo with a vision model: the fallback for cards
+     * whose text the text Parse couldn't read (ADR 0004). Throws ParseFailed
+     * when the LLM call fails. Metered like a text Parse, as `cloud-vision`.
+     */
+    async parseImage(accountId: string, image: Uint8Array, mimeType: string): Promise<ParseResult> {
+      let returned: ParsedFields;
+      try {
+        returned = await llm.parseCardImage({ image, mimeType });
+      } catch (cause) {
+        await meter(accountId, "cloud-vision", false);
+        throw new ParseFailed(cause);
+      }
+      await meter(accountId, "cloud-vision", true);
+      return { parsedBy: "cloud-vision", fields: cardFieldsFrom(returned) };
     },
 
     async usage(accountId: string): Promise<ParseUsage> {

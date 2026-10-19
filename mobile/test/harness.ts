@@ -13,6 +13,7 @@ import type {
   ParsedFields,
   RecognisedText,
   SqlValue,
+  TextParse,
 } from "../src/collection/ports";
 
 /** An in-memory SQLite database standing in for expo-sqlite. */
@@ -73,17 +74,39 @@ export class FakeApiClient implements ApiClient {
   online = true;
   /** Set to make the API's Parse fail, as when the LLM provider is down. */
   parseFails = false;
-  /** How the API says it parsed the card. */
-  parsedBy: CloudParse["parsedBy"] = "cloud-text";
+  /** The fields the text Parse finds. */
   fields: ParsedFields = {};
+  /** Set to make the text Parse unsure, so the API asks for the card's photo. */
+  imageWanted = false;
+  /** Set to make the API judge OCR's text too short to parse, and ask for the photo instead. */
+  textTooShort = false;
+  /** The fields the vision Parse finds in the photo. */
+  imageFields: ParsedFields = {};
+  /** Set to make the vision Parse fail. */
+  imageParseFails = false;
   /** The text of each Parse the API received. */
   readonly parseCalls: string[] = [];
-  async parseCardText(text: string): Promise<CloudParse> {
+  /** The photo of each vision Parse the API received. */
+  readonly imageParseCalls: string[] = [];
+
+  private reach() {
     if (!this.online) throw new Error("Network request failed");
     if (!this.signedIn) throw new Error("401 not-signed-in");
+  }
+
+  async parseCardText(text: string): Promise<TextParse> {
+    this.reach();
     this.parseCalls.push(text);
+    if (this.textTooShort) return { parsedBy: null, imageWanted: true };
     if (this.parseFails) throw new Error("502 parse-failed");
-    return { parsedBy: this.parsedBy, fields: this.fields };
+    return { parsedBy: "cloud-text", imageWanted: this.imageWanted, fields: this.fields };
+  }
+
+  async parseCardImage(image: CardImage): Promise<CloudParse> {
+    this.reach();
+    this.imageParseCalls.push(image.uri);
+    if (this.imageParseFails) throw new Error("502 parse-failed");
+    return { parsedBy: "cloud-vision", fields: this.imageFields };
   }
 }
 

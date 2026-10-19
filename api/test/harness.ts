@@ -5,6 +5,7 @@ import pg from "pg";
 import { createApp } from "../src/app.ts";
 import { migrate } from "../src/migrate.ts";
 import type { SocialProvidersConfig } from "../src/auth.ts";
+import type { VisionFallbackThresholds } from "../src/parse.ts";
 import { FakeEmailSender, FakeIdentityProviders, FakeLlmProvider, InMemoryObjectStorage } from "./fakes.ts";
 
 const TEST_DATABASE_URL =
@@ -37,6 +38,8 @@ export interface TestApiOptions {
   development?: boolean;
   /** Which social providers the server is configured for. Both are on by default. */
   socialProviders?: { google?: boolean; apple?: boolean };
+  /** When a text Parse asks for the card's image. Defaults to the API's own defaults. */
+  visionFallback?: VisionFallbackThresholds;
 }
 
 /** Placeholder credentials: real ones are only needed to talk to Google and Apple, which tests never do. */
@@ -100,6 +103,7 @@ export async function startTestApi(options: TestApiOptions = {}): Promise<TestAp
     trustedOrigins: [baseUrl],
     development: options.development ?? false,
     socialProviders: testSocialProviders(options.socialProviders),
+    visionFallback: options.visionFallback,
   });
   handle = (request) => app.fetch(request);
 
@@ -158,6 +162,11 @@ export class TestClient {
     return this.request<T>("POST", path, body);
   }
 
+  /** A multipart upload, as the app sends a card's photo. */
+  async postForm<T = unknown>(path: string, form: FormData): Promise<TestResponse<T>> {
+    return this.read<T>(await this.send("POST", path, form, "follow"));
+  }
+
   /** A GET that reports a redirect instead of following it, as a browser handing back to the app would. */
   async getWithoutFollowing(path: string): Promise<{ status: number; location: string | null }> {
     const response = await this.send("GET", path, undefined, "manual");
@@ -166,14 +175,19 @@ export class TestClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<TestResponse<T>> {
-    const response = await this.send(method, path, body, "follow");
+    return this.read<T>(await this.send(method, path, body, "follow"));
+  }
+
+  private async read<T>(response: Response): Promise<TestResponse<T>> {
     const text = await response.text();
     return { status: response.status, body: (text ? JSON.parse(text) : null) as T };
   }
 
   private async send(method: string, path: string, body: unknown, redirect: RequestRedirect): Promise<Response> {
     const headers: Record<string, string> = { ...this.originHeaders };
-    if (body !== undefined) headers["content-type"] = "application/json";
+    const form = body instanceof FormData;
+    // fetch sets a multipart body's content type itself, with its boundary.
+    if (body !== undefined && !form) headers["content-type"] = "application/json";
     if (this.cookies.size > 0) {
       headers.cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; ");
     }
@@ -181,7 +195,7 @@ export class TestClient {
     const response = await fetch(this.baseUrl + path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
       redirect,
     });
 
