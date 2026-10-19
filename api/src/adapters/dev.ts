@@ -11,7 +11,7 @@ function notConfigured(port: string): never {
   throw new Error(`${port} is not configured yet`);
 }
 
-/** Placeholder until the Parse ticket picks a provider (ADR 0004). */
+/** Used when ANTHROPIC_API_KEY isn't set: every cloud Parse fails, and the app parses on the device. */
 export const unconfiguredLlmProvider: LlmProvider = {
   parseCardText: async () => notConfigured("LLM provider"),
   parseCardImage: async () => notConfigured("LLM provider"),

@@ -6,7 +6,9 @@ import { cardScannerOcr } from "../collection/adapters/card-scanner";
 import { expoSqliteDatabase } from "../collection/adapters/expo-sqlite";
 import { fileSystemImageStore } from "../collection/adapters/file-system-image-store";
 import { heuristicParser } from "../collection/adapters/heuristic-parser";
-import { apiClientNotYetAvailable } from "../collection/adapters/not-yet-available";
+import { httpApiClient } from "../collection/adapters/http-api-client";
+import { signedOutApiClient } from "../collection/adapters/signed-out-api-client";
+import { apiUrl, authClient } from "./auth-client";
 
 const CollectionContext = createContext<Collection | null>(null);
 
@@ -26,7 +28,8 @@ async function openDeviceCollection(accountId: string | null): Promise<Collectio
     db: expoSqliteDatabase(db),
     ocr: cardScannerOcr,
     parser: heuristicParser,
-    api: apiClientNotYetAvailable,
+    // Signed in, scans are parsed in the cloud when there's signal; signed out, always on the device.
+    api: accountId ? httpApiClient({ baseUrl: apiUrl, cookie: authClient.getCookie }) : signedOutApiClient,
     images: fileSystemImageStore(name),
     newId: randomUUID,
     now: () => new Date(),

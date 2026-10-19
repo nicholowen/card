@@ -1,4 +1,5 @@
 import { socialFieldKey, type OnDeviceParser, type ParsedFields, type RecognisedLine, type RecognisedText } from "../ports";
+import { readingOrder } from "../reading-order";
 
 // The fallback on-device Parse (ADR 0004) for devices without an on-device
 // model: contact details by pattern, then name, job title and company from
@@ -107,17 +108,6 @@ function claimAddress(lines: Line[], first: Line): string {
   }
   for (const part of parts) part.claimed = true;
   return parts.map((part) => part.text.replace(/,\s*$/, "")).join(", ");
-}
-
-/**
- * Top to bottom, then left to right for lines side by side. OCR doesn't
- * promise any order, and the layout rules (an address's next line, the job
- * title under the name) depend on it.
- */
-function readingOrder(a: RecognisedLine, b: RecognisedLine): number {
-  const middle = (line: RecognisedLine) => line.box.y + line.box.height / 2;
-  const sameRow = Math.abs(middle(a) - middle(b)) < Math.min(a.box.height, b.box.height) / 2;
-  return sameRow ? a.box.x - b.box.x : a.box.y - b.box.y;
 }
 
 const FAX_LABEL = /\bf(?:ax)?\b/i;

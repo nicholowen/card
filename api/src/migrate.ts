@@ -29,4 +29,18 @@ export async function migrate(pool: Pool): Promise<void> {
     ALTER TABLE account DROP CONSTRAINT IF EXISTS account_role_check;
     ALTER TABLE account ADD CONSTRAINT account_role_check CHECK (role IN (${allowedRoles}));
   `);
+
+  // One row per call to the LLM provider, failed ones included, so Parse usage
+  // can be capped per Account later without a schema change (spec: Further
+  // Notes) and the Parse success rate measured (spec story 83).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS parse_call (
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      account_id text NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+      parsed_by text NOT NULL CHECK (parsed_by IN ('cloud-text', 'cloud-vision')),
+      succeeded boolean NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS parse_call_account_id_created_at ON parse_call (account_id, created_at);
+  `);
 }
