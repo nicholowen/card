@@ -98,7 +98,9 @@ Tap **Scan** to open the system document camera, which finds the card's edges an
 
 Either way the fields are shown for review with low-confidence ones marked "Check this". The photo is copied into the app's documents folder, under `card-images/<collection>/`, when the card is saved.
 
-No LLM provider is wired up yet: until one is (behind the `LlmProvider` port in `api/src/ports.ts`), the API answers every Parse with `502 parse-failed`, logs `[parse] LLM call failed`, and the app falls back to the device Parse. Pick the provider by checking its zero-data-retention and no-training terms first (spec, Further Notes).
+The cloud Parse uses Claude Haiku (`claude-haiku-5-5`) on the Claude API, with structured outputs, low effort and thinking off for speed (`api/src/adapters/anthropic.ts`). To turn it on, put a Claude API key from [platform.claude.com](https://platform.claude.com) in `ANTHROPIC_API_KEY` in `api/.env`, then check it with `npm run check-llm -w api`, which parses a sample card and prints the fields. Without a key the API logs a warning at startup, answers every Parse with `502 parse-failed`, and the app parses on the device.
+
+The API key is separate from a Claude subscription and billed per use. Anthropic deletes API inputs within 30 days by default and doesn't train on them; zero data retention, which the spec requires, has to be requested from Anthropic's sales team before public testing.
 
 Every call to the LLM provider is recorded in `parse_call` against the Account, with whether it succeeded, ready for a free-tier limit and a Parse success rate later. A signed-in Account can read its own counts at `GET /api/parse/usage`.
 

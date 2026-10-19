@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import pg from "pg";
+import { anthropicLlmProvider } from "./adapters/anthropic.ts";
 import { consoleEmailSender, unconfiguredLlmProvider, unconfiguredObjectStorage } from "./adapters/dev.ts";
 import { createApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
@@ -13,9 +14,12 @@ if (process.argv.includes("--migrate-only")) {
   await pool.end();
   console.log("Migrations applied.");
 } else {
+  if (!config.llm) console.warn("ANTHROPIC_API_KEY isn't set: cloud Parse is off, and the app parses cards on the device.");
+  const llm = config.llm ? anthropicLlmProvider(config.llm) : unconfiguredLlmProvider;
+
   const app = createApp({
     pool,
-    ports: { email: consoleEmailSender, llm: unconfiguredLlmProvider, storage: unconfiguredObjectStorage },
+    ports: { email: consoleEmailSender, llm, storage: unconfiguredObjectStorage },
     authSecret: config.authSecret,
     baseURL: config.baseURL,
     trustedOrigins: config.trustedOrigins,

@@ -1,3 +1,4 @@
+import { DEFAULT_ANTHROPIC_MODEL } from "./adapters/anthropic.ts";
 import type { SocialProvidersConfig } from "./auth.ts";
 
 function required(name: string): string {
@@ -43,5 +44,12 @@ export function loadConfig() {
       .map((origin) => origin.trim())
       .filter(Boolean),
     socialProviders: loadSocialProviders(),
+    llm: loadLlm(),
   };
+}
+
+/** The Claude API settings for cloud Parse. Without a key, cloud Parse is off and the app parses on the device. */
+export function loadLlm() {
+  const apiKey = optional("ANTHROPIC_API_KEY");
+  return apiKey ? { apiKey, model: optional("ANTHROPIC_MODEL") ?? DEFAULT_ANTHROPIC_MODEL } : undefined;
 }
