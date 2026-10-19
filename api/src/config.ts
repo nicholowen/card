@@ -51,5 +51,10 @@ export function loadConfig() {
 /** The Claude API settings for cloud Parse. Without a key, cloud Parse is off and the app parses on the device. */
 export function loadLlm() {
   const apiKey = optional("ANTHROPIC_API_KEY");
-  return apiKey ? { apiKey, model: optional("ANTHROPIC_MODEL") ?? DEFAULT_ANTHROPIC_MODEL } : undefined;
+  if (!apiKey) return undefined;
+  return {
+    apiKey,
+    model: optional("ANTHROPIC_MODEL") ?? DEFAULT_ANTHROPIC_MODEL,
+    workspaceId: optional("ANTHROPIC_WORKSPACE_ID"),
+  };
 }

@@ -69,9 +69,23 @@ type ParsedCard = Record<(typeof CARD_TEXT_FIELDS)[number], ParsedCardField> & {
  * recognised text is sent; nothing is kept beyond Anthropic's retention terms
  * (zero data retention once it's enabled for the organisation).
  */
-export function anthropicLlmProvider({ apiKey, model }: { apiKey: string; model: string }): LlmProvider {
-  // No retries: a slow or failed call should fall back to the device Parse, not keep the Holder waiting.
-  const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: 0 });
+export function anthropicLlmProvider({
+  apiKey,
+  model,
+  workspaceId,
+}: {
+  apiKey: string;
+  model: string;
+  /** Needed when the API key isn't scoped to a workspace: the Claude API then asks which workspace to use. */
+  workspaceId?: string;
+}): LlmProvider {
+  const client = new Anthropic({
+    apiKey,
+    timeout: TIMEOUT_MS,
+    // No retries: a slow or failed call should fall back to the device Parse, not keep the Holder waiting.
+    maxRetries: 0,
+    ...(workspaceId && { defaultHeaders: { "anthropic-workspace-id": workspaceId } }),
+  });
 
   return {
     async parseCardText({ text }) {
