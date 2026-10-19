@@ -1,7 +1,7 @@
 // Checks the Claude API settings in api/.env by parsing a sample card.
 // Run with: npm run check-llm -w api
 // Or parse a card of your own, one argument per line of text as OCR read it:
-//   npm run check-llm -w api -- "Hamish Erench" "DIRECTOR" "Mobile: 027 243 I450"
+//   npm run check-llm -w api -- "Aroha Ngata" "DIRECTOR" "Mobile: 027 243 I450"
 import { anthropicLlmProvider } from "../src/adapters/anthropic.ts";
 import { loadLlm } from "../src/config.ts";
 
